@@ -1,0 +1,88 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "never"
+  },
+  "editor.insertFinalNewline": true,
+  "editor.trimAutoWhitespace": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.eol": "\n",
+  "files.encoding": "utf8",
+
+  "eslint.enable": true,
+  "eslint.validate": ["javascript", "typescript"],
+  "eslint.workingDirectories": ["."],
+
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.suggest.autoImports": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "typescript.preferences.importModuleSpecifier": "relative",
+
+  "files.associations": {
+    "*.tmpl": "html"
+  },
+
+  "files.exclude": {
+    "**/node_modules": false,
+    "**/dist": false,
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/coverage": true,
+    "**/*.log": true
+  },
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/*.log": true,
+    "**/yarn.lock": true,
+    "**/package-lock.json": true
+  },
+
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": {
+      "comments": "off",
+      "strings": "off",
+      "other": "off"
+    }
+  },
+
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.fontSize": 14,
+
+  "workbench.colorCustomizations": {
+    "editorError.foreground": "#ff6b6b",
+    "editorWarning.foreground": "#feca57"
+  },
+
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableSmartCommit": true,
+
+  "explorer.compactFolders": false,
+  "explorer.fileNesting.enabled": false,
+  "explorer.fileNesting.patterns": {
+    "package.json": "yarn.lock,package-lock.json,.yarnrc.yml,.nvmrc,.node-version",
+    "tsconfig.json": "tsconfig.*.json",
+    "*.ts": "${capture}.js,${capture}.d.ts,${capture}.map",
+    ".eslintrc.cjs": ".eslintignore,.prettierrc,.prettierignore,.editorconfig",
+    "vite.config.ts": "vitest.config.ts"
+  }
+}

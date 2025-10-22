@@ -1,0 +1,37 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    // Test environment
+    environment: 'node',
+
+    // Global settings
+    globals: true,
+
+    // Test timeouts
+    testTimeout: 30000,
+    hookTimeout: 30000,
+
+    // Coverage configuration
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.test.ts', '**/*.spec.ts', '**/*.config.ts', 'bench/'],
+      thresholds: {
+        lines: 95,
+        functions: 95,
+        branches: 90,
+        statements: 95
+      }
+    },
+
+    // Benchmark configuration
+    benchmark: {
+      include: ['bench/**/*.bench.ts', 'benchmarks/**/*.bench.ts']
+    },
+
+    // Include/exclude patterns
+    include: ['tests/**/*.test.ts', 'tests/**/*.spec.ts'],
+    exclude: ['node_modules', 'dist', 'coverage', '.vitest']
+  }
+});

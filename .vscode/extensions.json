@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "editorconfig.editorconfig",
+    "ms-vscode.vscode-typescript-next",
+    "vitest.explorer",
+    "streetsidesoftware.code-spell-checker",
+    "eamodio.gitlens",
+    "gruntfuggly.todo-tree",
+    "wayou.vscode-todo-highlight",
+    "davidanson.vscode-markdownlint",
+    "yzhang.markdown-all-in-one"
+  ],
+  "unwantedRecommendations": ["ms-vscode.vetur", "octref.vetur"]
+}
