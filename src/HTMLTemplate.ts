@@ -7,23 +7,16 @@
  * @module HTMLTemplate
  */
 
-import type { Readable } from 'stream';
-import { readFileSync } from 'fs';
-import type {
-  HTMLTemplateOptions,
-  ParamValue,
-  QueryResult,
-  QueryOptions,
-  OutputOptions,
-  ParseNode
-} from './types.js';
-import { Tokenizer } from './parser/Tokenizer.js';
-import { Parser } from './parser/Parser.js';
+import { readFileSync } from 'node:fs';
+import type { Readable } from 'node:stream';
+import { CacheManager } from './cache/CacheManager.js';
 import { processIncludes } from './parser/IncludeProcessor.js';
+import { Parser } from './parser/Parser.js';
+import { Tokenizer } from './parser/Tokenizer.js';
 import { Context } from './runtime/Context.js';
 import { Executor } from './runtime/Executor.js';
-import { CacheManager } from './cache/CacheManager.js';
-import { resolveFile, getFileMtime } from './utils/FileResolver.js';
+import type { HTMLTemplateOptions, OutputOptions, ParamValue, ParseNode, QueryOptions, QueryResult } from './types.js';
+import { getFileMtime, resolveFile } from './utils/FileResolver.js';
 import { readFileWithEncoding } from './utils/encoding.js';
 import { createError } from './utils/helpers.js';
 
@@ -97,6 +90,9 @@ export class HTMLTemplate {
 
     // Apply filters
     let filteredSource = this.applyFilters(this.templateSource);
+
+    // Strip TMPL_COMMENT blocks (before include processing)
+    filteredSource = HTMLTemplate.stripComments(filteredSource);
 
     // Process includes
     let includeMtimes = new Map<string, number>();
@@ -225,9 +221,7 @@ export class HTMLTemplate {
 
       // Error detection
       // vanguard_compatibility_mode implies die_on_bad_params: false
-      die_on_bad_params: options.vanguard_compatibility_mode
-        ? false
-        : (options.die_on_bad_params ?? true),
+      die_on_bad_params: options.vanguard_compatibility_mode ? false : (options.die_on_bad_params ?? true),
       strict: options.strict ?? true,
       force_untaint: options.force_untaint ?? 0,
       vanguard_compatibility_mode: options.vanguard_compatibility_mode ?? false,
@@ -346,24 +340,13 @@ export class HTMLTemplate {
    * @returns Template content
    */
   private static readStream(stream: Readable): string {
-    // Synchronous stream reading
+    // Synchronous stream reading using readable iteration
     const chunks: Buffer[] = [];
-
-    stream.on('data', (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-
-    // Wait for stream to end (blocking)
-    let ended = false;
-    stream.on('end', () => {
-      ended = true;
-    });
-
-    // Simple blocking wait
-    // eslint-disable-next-line no-constant-condition
-    while (!ended) {
-      // Busy wait - not ideal but matches Perl blocking behavior
-      // In production, this should use async/await
+    let chunk: Buffer | null;
+    chunk = stream.read() as Buffer | null;
+    while (chunk !== null) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      chunk = stream.read() as Buffer | null;
     }
 
     return Buffer.concat(chunks).toString('utf-8');
@@ -404,6 +387,19 @@ export class HTMLTemplate {
 
     // Ensure final result is string
     return Array.isArray(filtered) ? filtered.join('\n') : filtered;
+  }
+
+  /**
+   * Strip TMPL_COMMENT and TMPL_NOTE blocks from template source
+   *
+   * @param source - Template source
+   * @returns Source with comment blocks removed
+   */
+  private static stripComments(source: string): string {
+    return source.replace(
+      /<\s*(?:!--\s*)?TMPL_(?:COMMENT|NOTE)\b[^>]*(?:--\s*)?>([\s\S]*?)<\s*(?:!--\s*)?\/TMPL_(?:COMMENT|NOTE)\s*(?:--\s*)?>/gi,
+      ''
+    );
   }
 
   /**
@@ -549,14 +545,8 @@ export class HTMLTemplate {
         params.add(node.name);
       } else if (node.type === 'LOOP') {
         params.add(node.name);
-        // Also include nested parameters
-        node.body.forEach(processNode);
       } else if (node.type === 'COND') {
         params.add(node.name);
-        node.consequent.forEach(processNode);
-        if (node.alternate) {
-          node.alternate.forEach(processNode);
-        }
       }
     };
 

@@ -3,7 +3,7 @@
  * Port of Perl HTML::Template TMPL_IF, TMPL_UNLESS, TMPL_ELSE tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('TMPL_IF / TMPL_UNLESS Tests', () => {

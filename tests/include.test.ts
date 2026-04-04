@@ -3,10 +3,10 @@
  * Tests for template inclusion functionality
  */
 
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { writeFileSync, unlinkSync } from 'fs';
-import { describe, it, expect } from 'vitest';
+import { unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -204,7 +204,8 @@ describe('TMPL_INCLUDE', () => {
 
     it('should process other includes even when one is missing', () => {
       const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_INCLUDE NAME="header.tmpl"> <TMPL_INCLUDE NAME="missing.tmpl"> <TMPL_INCLUDE NAME="footer.tmpl">',
+        scalarref:
+          '<TMPL_INCLUDE NAME="header.tmpl"> <TMPL_INCLUDE NAME="missing.tmpl"> <TMPL_INCLUDE NAME="footer.tmpl">',
         path: [fixturesPath],
         die_on_missing_include: false
       });
@@ -215,17 +216,14 @@ describe('TMPL_INCLUDE', () => {
   });
 
   describe('no_includes option', () => {
-    it('should not process includes when no_includes is true', () => {
-      // Should fail during template creation since INCLUDE tag wasn't preprocessed
-      const result = expect(() => {
-        const tmpl = new HTMLTemplate({
-          scalarref: 'Start <TMPL_INCLUDE NAME="header.tmpl"> End',
-          path: [fixturesPath],
-          no_includes: true
-        });
-        return tmpl;
+    it('should silently ignore includes when no_includes is true', () => {
+      const tmpl = new HTMLTemplate({
+        scalarref: 'Start <TMPL_INCLUDE NAME="header.tmpl"> End',
+        path: [fixturesPath],
+        no_includes: true
       });
-      result.toThrow(/TMPL_INCLUDE tag found but not processed/);
+      const output = tmpl.output();
+      expect(output).toBe('Start  End');
     });
   });
 
@@ -273,11 +271,7 @@ describe('TMPL_INCLUDE', () => {
         scalarref: 'Items: <TMPL_INCLUDE NAME="with-loop.tmpl">',
         path: [fixturesPath]
       });
-      tmpl.param('items', [
-        { item: 'a' },
-        { item: 'b' },
-        { item: 'c' }
-      ]);
+      tmpl.param('items', [{ item: 'a' }, { item: 'b' }, { item: 'c' }]);
       expect(tmpl.output()).toBe('Items: a,b,c,');
 
       // Cleanup

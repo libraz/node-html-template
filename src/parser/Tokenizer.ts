@@ -11,9 +11,9 @@
  * @module parser/Tokenizer
  */
 
-import type { Token, EscapeType } from '../types.js';
-import type { ParseContext, AttributeMap } from './types.js';
+import type { EscapeType, Token } from '../types.js';
 import { createError } from '../utils/helpers.js';
+import type { AttributeMap, ParseContext } from './types.js';
 
 // ============================================================================
 // Precompiled Regular Expressions (Module Scope for Maximum Performance)
@@ -57,6 +57,11 @@ export class Tokenizer {
   private context: ParseContext;
 
   private vanguardMode: boolean;
+
+  /** Running position tracker for O(1) line/col calculation */
+  private trackedPos = 0;
+  private trackedLine = 1;
+  private trackedCol = 1;
 
   /**
    * Create tokenizer
@@ -216,12 +221,7 @@ export class Tokenizer {
    * @param pos - Position in source
    * @returns Token or null if invalid
    */
-  private createTagToken(
-    tagName: string,
-    attrString: string,
-    isClosing: boolean,
-    pos: number
-  ): Token | null {
+  private createTagToken(tagName: string, attrString: string, isClosing: boolean, pos: number): Token | null {
     const position = this.getPosition(pos);
     const attrs = Tokenizer.parseAttributes(attrString);
 
@@ -264,13 +264,13 @@ export class Tokenizer {
    */
   private createVarToken(attrs: AttributeMap, position: { line: number; col: number }): Token {
     const name = this.getRequiredAttr(attrs, 'NAME', position);
-    const escape = Tokenizer.getEscapeType(attrs);
+    const escapeType = Tokenizer.getEscapeType(attrs);
     const defaultValue = attrs.get('default');
 
     return {
       type: 'VAR',
       name,
-      escape,
+      escape: escapeType,
       default: defaultValue,
       line: position.line,
       col: position.col
@@ -387,18 +387,10 @@ export class Tokenizer {
    * @param position - Position for error message
    * @returns Attribute value
    */
-  private getRequiredAttr(
-    attrs: AttributeMap,
-    name: string,
-    position: { line: number; col: number }
-  ): string {
+  private getRequiredAttr(attrs: AttributeMap, name: string, position: { line: number; col: number }): string {
     const value = attrs.get(name.toLowerCase());
     if (value === undefined) {
-      throw createError(
-        `${name} attribute required in TMPL_* tag`,
-        this.context.filename,
-        position.line
-      );
+      throw createError(`${name} attribute required in TMPL_* tag`, this.context.filename, position.line);
     }
     return value;
   }
@@ -411,10 +403,11 @@ export class Tokenizer {
    * @returns Escape type
    */
   private static getEscapeType(attrs: AttributeMap): EscapeType {
-    const escape = attrs.get('escape')?.toLowerCase();
+    const escapeAttr = attrs.get('escape')?.toLowerCase();
 
-    switch (escape) {
+    switch (escapeAttr) {
       case 'html':
+      case '1':
         return 'html';
       case 'js':
       case 'javascript':
@@ -426,31 +419,30 @@ export class Tokenizer {
       case undefined:
         return 'none';
       default:
-        // Unknown escape type - default to none
         return 'none';
     }
   }
 
   /**
-   * Get line/column position from absolute position in source
+   * Get line/column position from absolute position in source.
+   * Uses running counters for O(1) amortized performance.
    *
    * @param pos - Absolute position in source string
    * @returns Line and column (1-indexed)
    */
   private getPosition(pos: number): { line: number; col: number } {
     const { source } = this.context;
-    let line = 1;
-    let col = 1;
 
-    for (let i = 0; i < pos && i < source.length; i++) {
+    for (let i = this.trackedPos; i < pos && i < source.length; i++) {
       if (source[i] === '\n') {
-        line++;
-        col = 1;
+        this.trackedLine++;
+        this.trackedCol = 1;
       } else {
-        col++;
+        this.trackedCol++;
       }
     }
+    this.trackedPos = pos;
 
-    return { line, col };
+    return { line: this.trackedLine, col: this.trackedCol };
   }
 }

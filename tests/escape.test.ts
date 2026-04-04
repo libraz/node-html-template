@@ -3,7 +3,7 @@
  * Port of Perl HTML::Template ESCAPE option tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('ESCAPE Tests', () => {
@@ -237,21 +237,16 @@ describe('ESCAPE Tests', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="value" ESCAPE="html">,</TMPL_LOOP>'
       });
-      tmpl.param('items', [
-        { value: '<a>' },
-        { value: '<b>' },
-        { value: '<c>' }
-      ]);
+      tmpl.param('items', [{ value: '<a>' }, { value: '<b>' }, { value: '<c>' }]);
       expect(tmpl.output()).toBe('&lt;a&gt;,&lt;b&gt;,&lt;c&gt;,');
     });
 
     it('should respect different escape types per variable in loop', () => {
       const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="html" ESCAPE="html">|<TMPL_VAR NAME="js" ESCAPE="js"> </TMPL_LOOP>'
+        scalarref:
+          '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="html" ESCAPE="html">|<TMPL_VAR NAME="js" ESCAPE="js"> </TMPL_LOOP>'
       });
-      tmpl.param('items', [
-        { html: '<b>', js: '"test"' }
-      ]);
+      tmpl.param('items', [{ html: '<b>', js: '"test"' }]);
       expect(tmpl.output()).toBe('&lt;b&gt;|\\"test\\" ');
     });
   });
@@ -259,7 +254,8 @@ describe('ESCAPE Tests', () => {
   describe('Multiple escape types in same template', () => {
     it('should handle different escape types correctly', () => {
       const tmpl = new HTMLTemplate({
-        scalarref: 'HTML:<TMPL_VAR NAME="a" ESCAPE="html"> JS:<TMPL_VAR NAME="b" ESCAPE="js"> URL:<TMPL_VAR NAME="c" ESCAPE="url">'
+        scalarref:
+          'HTML:<TMPL_VAR NAME="a" ESCAPE="html"> JS:<TMPL_VAR NAME="b" ESCAPE="js"> URL:<TMPL_VAR NAME="c" ESCAPE="url">'
       });
       tmpl.param('a', '<tag>');
       tmpl.param('b', '"quote"');

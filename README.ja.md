@@ -1,6 +1,6 @@
-# node-perl-html-template
+# @libraz/html-template
 
-[![npm version](https://img.shields.io/npm/v/node-perl-html-template.svg)](https://www.npmjs.com/package/node-perl-html-template)
+[![npm version](https://img.shields.io/npm/v/@libraz/html-template.svg)](https://www.npmjs.com/package/@libraz/html-template)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 
@@ -17,23 +17,23 @@ Perl の **HTML::Template v2.98** の完全な TypeScript/ESM 移植版。100% A
 - ✅ **ESM ファースト** - モダンな ES Module サポート
 - ✅ **高速** - 高度に最適化されたパーサーと実行エンジン
 - ✅ **依存ゼロ** - 外部ランタイム依存なし
-- ✅ **充実したテスト** - 200+ テストで全機能をカバー
+- ✅ **充実したテスト** - 240+ テストで全機能をカバー
 - ✅ **セキュア** - HTML/URL/JS エスケープによる XSS 対策
 
 ## インストール
 
 ```bash
-npm install node-perl-html-template
+npm install @libraz/html-template
 ```
 
 ```bash
-yarn add node-perl-html-template
+yarn add @libraz/html-template
 ```
 
 ## クイックスタート
 
 ```typescript
-import { HTMLTemplate } from 'node-perl-html-template';
+import { HTMLTemplate } from '@libraz/html-template';
 
 // 文字列からテンプレート作成
 const tmpl = new HTMLTemplate({
@@ -120,12 +120,27 @@ tmpl.param({
 });
 ```
 
+`ESCAPE=1` は `ESCAPE="HTML"` の Perl 互換ショートハンドとして使用可能です。
+
 ### デフォルトエスケープ
 
 ```typescript
 const tmpl = new HTMLTemplate({
   scalarref: '<TMPL_VAR NAME="html">',
   default_escape: 'html'  // 全変数をデフォルトで HTML エスケープ
+});
+```
+
+### テンプレートコメント
+
+```typescript
+// TMPL_COMMENT / TMPL_NOTE ブロックは出力から除去されます
+const tmpl = new HTMLTemplate({
+  scalarref: `
+    表示される内容
+    <TMPL_COMMENT>これは出力に含まれません</TMPL_COMMENT>
+    表示される内容
+  `
 });
 ```
 
@@ -149,21 +164,68 @@ const tmpl = new HTMLTemplate({
 
 ```typescript
 const tmpl = new HTMLTemplate({
-  scalarref: '<TMPL_VAR NAME="foo"> <TMPL_LOOP NAME="items">...</TMPL_LOOP>'
+  scalarref: '<TMPL_VAR NAME="foo"> <TMPL_LOOP NAME="items"><TMPL_VAR NAME="x"></TMPL_LOOP>'
 });
 
-// 全パラメータ名を取得
-console.log(tmpl.query());  // ['foo', 'items', ...]
+// トップレベルのパラメータ名を取得
+console.log(tmpl.query());  // ['foo', 'items']
 
 // パラメータタイプをチェック
 console.log(tmpl.query({ name: 'foo' }));     // 'VAR'
 console.log(tmpl.query({ name: 'items' }));   // 'LOOP'
 
 // ループ内のパラメータを取得
-console.log(tmpl.query({ loop: 'items' }));   // [...]
+console.log(tmpl.query({ loop: 'items' }));   // ['x']
 ```
 
 ## 高度な機能
+
+### 遅延評価（Lazy Values）
+
+変数やループが実際に使われるまで計算を遅延：
+
+```typescript
+const tmpl = new HTMLTemplate({
+  scalarref: '<TMPL_VAR NAME="expensive">',
+  die_on_bad_params: false
+});
+
+// 変数がレンダリングされた時のみ関数が呼ばれる
+tmpl.param('expensive', () => computeExpensiveValue());
+```
+
+### Associate オブジェクト
+
+`param()` メソッドを持つ外部オブジェクトからパラメータを取得（CGI.pm 互換）：
+
+```typescript
+const cgi = {
+  param: (name: string) => {
+    if (name === 'user') return 'alice';
+    return undefined;
+  }
+};
+
+const tmpl = new HTMLTemplate({
+  scalarref: '<TMPL_VAR NAME="user">',
+  associate: cgi,
+  die_on_bad_params: false
+});
+```
+
+### コンテンツフィルター
+
+パース前にテンプレート内容を変換：
+
+```typescript
+const tmpl = new HTMLTemplate({
+  scalarref: 'hello <TMPL_VAR NAME="name">',
+  filter: {
+    sub: (content) => (content as string).toUpperCase(),
+    format: 'scalar'
+  }
+});
+```
 
 ### Vanguard 互換モード
 
@@ -193,14 +255,17 @@ const tmpl = new HTMLTemplate({
 const tmpl = new HTMLTemplate({
   scalarref: `
     <TMPL_LOOP NAME="items">
-      アイテム <TMPL_VAR NAME="__COUNTER__"> / <TMPL_VAR NAME="__SIZE__">
-      <TMPL_IF NAME="__FIRST__">最初!</TMPL_IF>
-      <TMPL_IF NAME="__LAST__">最後!</TMPL_IF>
+      アイテム <TMPL_VAR NAME="__counter__">
+      <TMPL_IF NAME="__first__">最初!</TMPL_IF>
+      <TMPL_IF NAME="__last__">最後!</TMPL_IF>
+      <TMPL_IF NAME="__odd__">奇数行</TMPL_IF>
     </TMPL_LOOP>
   `,
   loop_context_vars: true
 });
 ```
+
+利用可能なコンテキスト変数: `__first__`, `__last__`, `__inner__`, `__outer__`, `__odd__`, `__even__`, `__counter__`（1始まり）, `__index__`（0始まり）
 
 ### グローバル変数
 
@@ -221,8 +286,6 @@ const tmpl = new HTMLTemplate({
 ベンチマーク実行：
 
 ```bash
-npm run bench
-# または
 yarn bench
 ```
 
@@ -233,7 +296,7 @@ yarn bench
 
 ## 互換性
 
-- **Node.js**: ≥22.0.0
+- **Node.js**: >= 22.0.0
 - **Perl HTML::Template**: v2.98（100% 互換）
 
 ## Perl からの移行
@@ -250,19 +313,13 @@ print $template->output();
 
 ```typescript
 // TypeScript/JavaScript
-import { HTMLTemplate } from 'node-perl-html-template';
+import { HTMLTemplate } from '@libraz/html-template';
 const template = new HTMLTemplate({ filename: 'template.tmpl' });
 template.param('name', 'World');
 console.log(template.output());
 ```
 
 ## テスト
-
-```bash
-npm test              # 全テスト実行
-npm run test:watch    # ウォッチモード
-npm run test:coverage # カバレッジレポート生成
-```
 
 ```bash
 yarn test             # 全テスト実行
@@ -273,33 +330,23 @@ yarn test:coverage    # カバレッジレポート生成
 ## 開発
 
 ```bash
-npm run dev          # 開発用ウォッチモード
-npm run build        # プロダクションビルド
-npm run lint         # ESLint 実行
-npm run type-check   # TypeScript 型チェック
-```
-
-```bash
 yarn dev             # 開発用ウォッチモード
 yarn build           # プロダクションビルド
-yarn lint            # ESLint 実行
+yarn lint            # Biome lint 実行
+yarn format          # Biome フォーマット
 yarn type-check      # TypeScript 型チェック
 ```
 
 ## ライセンス
 
-MIT © [libraz](https://github.com/libraz)
+MIT
 
 ## クレジット
 
 本プロジェクトは Sam Tregar による Perl の [HTML::Template](https://metacpan.org/pod/HTML::Template) モジュールの完全な TypeScript 移植版です。元の設計と API のすべてのクレジットは Perl コミュニティに帰属します。
 
-## 貢献
-
-コントリビューション歓迎！プルリクエストをお気軽に送信してください。
-
 ## リンク
 
-- [npm パッケージ](https://www.npmjs.com/package/node-perl-html-template)
+- [npm パッケージ](https://www.npmjs.com/package/@libraz/html-template)
 - [GitHub リポジトリ](https://github.com/libraz/node-perl-html-template)
 - [オリジナル Perl HTML::Template](https://metacpan.org/pod/HTML::Template)

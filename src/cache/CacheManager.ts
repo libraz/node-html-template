@@ -11,10 +11,10 @@
  * @module cache/CacheManager
  */
 
-import type { HTMLTemplateOptions, CacheEntry, ParseNode } from '../types.js';
-import { MemoryCache } from './MemoryCache.js';
-import { FileCache } from './FileCache.js';
+import type { CacheEntry, HTMLTemplateOptions, ParseNode } from '../types.js';
 import { hashCode } from '../utils/helpers.js';
+import { FileCache } from './FileCache.js';
+import { MemoryCache } from './MemoryCache.js';
 
 /**
  * Cache manager
@@ -63,10 +63,7 @@ export class CacheManager {
       if (!options.file_cache_dir) {
         throw new Error('file_cache requires file_cache_dir option');
       }
-      this.fileCache = new FileCache(
-        options.file_cache_dir,
-        options.file_cache_dir_mode ?? 0o700
-      );
+      this.fileCache = new FileCache(options.file_cache_dir, options.file_cache_dir_mode ?? 0o700);
       if (this.debug) {
         console.error('[CacheManager] File cache enabled in:', options.file_cache_dir);
       }
@@ -200,12 +197,10 @@ export class CacheManager {
   getStats(): {
     memoryCache?: { size: number; maxSize: number; blindMode: boolean };
     fileCache?: { enabled: boolean; dir?: string };
-    } {
+  } {
     return {
       memoryCache: this.memoryCache?.getStats(),
-      fileCache: this.fileCache
-        ? { enabled: true, dir: this.options.file_cache_dir }
-        : undefined
+      fileCache: this.fileCache ? { enabled: true, dir: this.options.file_cache_dir } : undefined
     };
   }
 }

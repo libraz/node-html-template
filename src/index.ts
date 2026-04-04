@@ -27,4 +27,4 @@ export type {
 } from './types.js';
 
 // Version
-export const version = '1.0.0';
+export const version = '1.1.0';

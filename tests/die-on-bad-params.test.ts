@@ -3,7 +3,7 @@
  * Tests for parameter validation
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('die_on_bad_params option', () => {
@@ -253,11 +253,13 @@ describe('die_on_bad_params option', () => {
 
       // Top-level loop is valid
       expect(() => {
-        tmpl.param('outer', [{
-          outer_var: 'test',
-          has_inner: true,
-          inner: [{ inner_var: 'nested' }]
-        }]);
+        tmpl.param('outer', [
+          {
+            outer_var: 'test',
+            has_inner: true,
+            inner: [{ inner_var: 'nested' }]
+          }
+        ]);
       }).not.toThrow();
 
       // All parameter names found in template are valid

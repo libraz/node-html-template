@@ -12,12 +12,10 @@
  * @module runtime/Executor
  */
 
-import type {
-  ParseNode, TextNode, VarNode, LoopNode, CondNode
-} from '../types.js';
-import { Context } from './Context.js';
-import { escape } from './Escape.js';
+import type { CondNode, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
 import { fastJoin } from '../utils/helpers.js';
+import type { Context } from './Context.js';
+import { escapeValue } from './Escape.js';
 
 /**
  * Template executor
@@ -111,7 +109,7 @@ export class Executor {
     const value = this.context.getVarValue(node.name, node.default);
 
     // Apply escaping
-    return escape(value, node.escape);
+    return escapeValue(value, node.escape);
   }
 
   /**

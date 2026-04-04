@@ -3,7 +3,7 @@
  * Tests for template structure querying
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('query() method', () => {
@@ -26,13 +26,13 @@ describe('query() method', () => {
       expect(result).toEqual(['bar', 'baz', 'foo']); // Sorted alphabetically
     });
 
-    it('should include loop names', () => {
+    it('should include loop names but not nested params', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_VAR NAME="title"> <TMPL_LOOP NAME="items"><TMPL_VAR NAME="item"></TMPL_LOOP>'
       });
 
       const result = tmpl.query();
-      expect(result).toEqual(['item', 'items', 'title']);
+      expect(result).toEqual(['items', 'title']);
     });
 
     it('should include conditional names', () => {
@@ -44,7 +44,7 @@ describe('query() method', () => {
       expect(result).toEqual(['hide', 'show']);
     });
 
-    it('should include nested parameters', () => {
+    it('should return only top-level parameters (Perl-compatible)', () => {
       const tmpl = new HTMLTemplate({
         scalarref: `
           <TMPL_VAR NAME="title">
@@ -58,7 +58,7 @@ describe('query() method', () => {
       });
 
       const result = tmpl.query();
-      expect(result).toEqual(['inner', 'inner_var', 'outer', 'outer_var', 'title']);
+      expect(result).toEqual(['outer', 'title']);
     });
 
     it('should not include duplicates', () => {
@@ -246,15 +246,7 @@ describe('query() method', () => {
       });
 
       const allParams = tmpl.query();
-      expect(allParams).toEqual([
-        'footer',
-        'hide_footer',
-        'item_name',
-        'item_value',
-        'items',
-        'show_list',
-        'title'
-      ]);
+      expect(allParams).toEqual(['hide_footer', 'show_list', 'title']);
 
       expect(tmpl.query({ name: 'title' })).toBe('VAR');
       expect(tmpl.query({ name: 'show_list' })).toBe('VAR');
@@ -301,7 +293,7 @@ describe('query() method', () => {
       });
 
       const allParams = tmpl.query();
-      expect(allParams).toEqual(['condition', 'false_var', 'true_var']);
+      expect(allParams).toEqual(['condition']);
 
       expect(tmpl.query({ name: 'condition' })).toBe('VAR');
       expect(tmpl.query({ name: 'true_var' })).toBe('VAR');

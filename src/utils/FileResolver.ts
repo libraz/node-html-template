@@ -5,10 +5,8 @@
  * @module utils/FileResolver
  */
 
-import { existsSync, statSync } from 'fs';
-import {
-  resolve, dirname, isAbsolute, join
-} from 'path';
+import { existsSync, statSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createError } from './helpers.js';
 
 /**

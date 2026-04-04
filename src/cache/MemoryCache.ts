@@ -40,7 +40,7 @@ export class MemoryCache {
    * @param blindMode - Enable blind cache (skip mtime validation)
    * @param maxSize - Maximum number of cached templates
    */
-  constructor(blindMode: boolean = false, maxSize: number = 100) {
+  constructor(blindMode = false, maxSize = 100) {
     this.cache = new Map();
     this.blindMode = blindMode;
     this.maxSize = maxSize;

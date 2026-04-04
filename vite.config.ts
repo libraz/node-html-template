@@ -1,5 +1,5 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
-import { resolve } from 'path';
 import dts from 'vite-plugin-dts';
 
 export default defineConfig({
@@ -18,7 +18,18 @@ export default defineConfig({
       fileName: () => 'index.js'
     },
     rollupOptions: {
-      external: ['fs', 'path', 'crypto', 'stream', 'util'],
+      external: [
+        'fs',
+        'path',
+        'crypto',
+        'stream',
+        'util',
+        'node:fs',
+        'node:path',
+        'node:crypto',
+        'node:stream',
+        'node:util'
+      ],
       output: {
         preserveModules: false,
         exports: 'named'

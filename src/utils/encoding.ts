@@ -5,7 +5,7 @@
  * @module utils/encoding
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 
 /**
  * Read file with specified encoding
@@ -180,5 +180,5 @@ export function isBinaryContent(content: string): boolean {
   }
 
   // If more than 30% non-printable, likely binary
-  return (nonPrintable / maxCheck) > 0.3;
+  return nonPrintable / maxCheck > 0.3;
 }

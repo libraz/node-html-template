@@ -5,12 +5,9 @@
  * @module utils/LazyValue
  */
 
-/* eslint-disable max-classes-per-file */
 // CachedLazyValue and CachedLazyLoop are tightly coupled and belong together
 
-import type {
-  LazyValue, LazyLoopValue, LoopDataItem, ParamValue
-} from '../types.js';
+import type { LazyLoopValue, LazyValue, LoopDataItem, ParamValue } from '../types.js';
 import { isFunction } from './helpers.js';
 
 /**
@@ -53,7 +50,7 @@ export function evaluateLazyValue(value: ParamValue): string | number | boolean 
  * Evaluates function once and caches result
  */
 export class CachedLazyValue {
-  private evaluated: boolean = false;
+  private evaluated = false;
 
   private cachedValue: string | number | boolean | null | undefined;
 
@@ -63,7 +60,6 @@ export class CachedLazyValue {
    * @param lazyFn - Lazy value function
    */
   // Constructor initializes private readonly field
-  // eslint-disable-next-line no-useless-constructor, no-empty-function
   constructor(private readonly lazyFn: LazyValue) {}
 
   /**
@@ -102,7 +98,7 @@ export class CachedLazyValue {
  * Evaluates function once and caches result
  */
 export class CachedLazyLoop {
-  private evaluated: boolean = false;
+  private evaluated = false;
 
   private cachedData: LoopDataItem[] = [];
 
@@ -112,7 +108,6 @@ export class CachedLazyLoop {
    * @param lazyFn - Lazy loop function
    */
   // Constructor initializes private readonly field
-  // eslint-disable-next-line no-useless-constructor, no-empty-function
   constructor(private readonly lazyFn: LazyLoopValue) {}
 
   /**
@@ -158,10 +153,7 @@ export class CachedLazyLoop {
  * @param enableCache - Whether to enable caching
  * @returns Cached wrapper or original value
  */
-export function maybeCacheLazyValue(
-  value: ParamValue,
-  enableCache: boolean
-): ParamValue | CachedLazyValue {
+export function maybeCacheLazyValue(value: ParamValue, enableCache: boolean): ParamValue | CachedLazyValue {
   if (enableCache && isLazyValue(value)) {
     return new CachedLazyValue(value);
   }
@@ -175,10 +167,7 @@ export function maybeCacheLazyValue(
  * @param enableCache - Whether to enable caching
  * @returns Cached wrapper or original value
  */
-export function maybeCacheLazyLoop(
-  value: ParamValue,
-  enableCache: boolean
-): ParamValue | CachedLazyLoop {
+export function maybeCacheLazyLoop(value: ParamValue, enableCache: boolean): ParamValue | CachedLazyLoop {
   if (enableCache && isLazyLoop(value)) {
     return new CachedLazyLoop(value as LazyLoopValue);
   }
@@ -204,11 +193,11 @@ export function getFinalValue(value: unknown): string | number | boolean | null 
   }
   // Return primitive values
   if (
-    typeof value === 'string'
-    || typeof value === 'number'
-    || typeof value === 'boolean'
-    || value === null
-    || value === undefined
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value === null ||
+    value === undefined
   ) {
     return value;
   }

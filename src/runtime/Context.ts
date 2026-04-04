@@ -12,11 +12,9 @@
  * @module runtime/Context
  */
 
-import type {
-  ParamValue, LoopDataItem, AssociateObject, HTMLTemplateOptions
-} from '../types.js';
-import { normalizeParamName, isTruthy } from '../utils/helpers.js';
-import { getFinalValue, getFinalLoopData } from '../utils/LazyValue.js';
+import type { AssociateObject, HTMLTemplateOptions, LoopDataItem, ParamValue } from '../types.js';
+import { getFinalLoopData, getFinalValue } from '../utils/LazyValue.js';
+import { isTruthy, normalizeParamName } from '../utils/helpers.js';
 
 /**
  * Parameter scope
@@ -207,7 +205,7 @@ export class Context {
   pushScope(params: LoopDataItem, loopIndex: number, loopLength: number): void {
     const newScope: Scope = {
       params: new Map(),
-      parent: this.options.global_vars ? this.currentScope : undefined
+      parent: this.currentScope
     };
 
     // Add loop iteration parameters
@@ -259,12 +257,15 @@ export class Context {
     const isLast = index === length - 1;
     const counter = index + 1; // 1-based
 
-    setVar('__first__', isFirst);
-    setVar('__last__', isLast);
-    setVar('__inner__', !isFirst && !isLast);
-    setVar('__outer__', isFirst || isLast);
-    setVar('__odd__', counter % 2 === 1);
-    setVar('__even__', counter % 2 === 0);
+    // Use Perl-compatible values: 1 for true, '' for false
+    const perlBool = (v: boolean): number | string => (v ? 1 : '');
+
+    setVar('__first__', perlBool(isFirst));
+    setVar('__last__', perlBool(isLast));
+    setVar('__inner__', perlBool(!isFirst && !isLast));
+    setVar('__outer__', perlBool(isFirst || isLast));
+    setVar('__odd__', perlBool(counter % 2 === 1));
+    setVar('__even__', perlBool(counter % 2 === 0));
     setVar('__counter__', counter);
     setVar('__index__', index);
   }

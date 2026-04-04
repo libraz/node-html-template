@@ -3,7 +3,7 @@
  * Tests core features to ensure basic implementation works
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('HTMLTemplate - Smoke Tests', () => {
@@ -78,11 +78,7 @@ describe('HTMLTemplate - Smoke Tests', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="name">,</TMPL_LOOP>'
       });
-      tmpl.param('items', [
-        { name: 'foo' },
-        { name: 'bar' },
-        { name: 'baz' }
-      ]);
+      tmpl.param('items', [{ name: 'foo' }, { name: 'bar' }, { name: 'baz' }]);
       const output = tmpl.output();
       expect(output).toBe('foo,bar,baz,');
     });

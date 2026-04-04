@@ -72,7 +72,10 @@ describe('Basic Operations', () => {
       `
     });
     tmpl.param({
-      show: true, hide: false, content: 'Content', footer: 'Footer'
+      show: true,
+      hide: false,
+      content: 'Content',
+      footer: 'Footer'
     });
     tmpl.output();
   });
@@ -132,12 +135,10 @@ describe('Template Compilation', () => {
   `;
 
   bench('Parse simple template', () => {
-    // eslint-disable-next-line no-void
     void new HTMLTemplate({ scalarref: simpleTemplate });
   });
 
   bench('Parse complex template', () => {
-    // eslint-disable-next-line no-void
     void new HTMLTemplate({ scalarref: complexTemplate });
   });
 

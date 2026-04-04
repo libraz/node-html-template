@@ -11,10 +11,8 @@
  * @module cache/FileCache
  */
 
-import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, statSync, unlinkSync
-} from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { CacheEntry, ParseNode } from '../types.js';
 import { validateMtimes } from '../utils/FileResolver.js';
 import { createError } from '../utils/helpers.js';
@@ -39,7 +37,7 @@ export class FileCache {
    * @param cacheDir - Directory for cache files
    * @param dirMode - Directory permissions (default: 0o700)
    */
-  constructor(cacheDir: string, dirMode: number = 0o700) {
+  constructor(cacheDir: string, dirMode = 0o700) {
     this.cacheDir = cacheDir;
     this.dirMode = dirMode;
 
@@ -160,17 +158,22 @@ export class FileCache {
   /**
    * Clear all cached entries
    * Removes all .json files from cache directory
-   *
-   * Note: This is a simplified no-op implementation
-   * A production version would use readdir and unlink all .json files
    */
   clear(): void {
-    // TODO: Implement full cache directory clearing
-    // For now, this is a no-op
-    // Individual entries can be deleted with delete()
-    const dirInfo = this.cacheDir; // Use this to avoid ESLint error
-    if (dirInfo) {
-      // Clear implementation would go here
+    if (!existsSync(this.cacheDir)) return;
+    try {
+      const files = readdirSync(this.cacheDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          try {
+            unlinkSync(join(this.cacheDir, file));
+          } catch {
+            // Ignore individual deletion errors
+          }
+        }
+      }
+    } catch {
+      // Ignore read errors
     }
   }
 

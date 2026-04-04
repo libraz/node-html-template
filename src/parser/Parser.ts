@@ -11,7 +11,7 @@
  * @module parser/Parser
  */
 
-import type { Token, ParseNode } from '../types.js';
+import type { ParseNode, Token } from '../types.js';
 import { createError } from '../utils/helpers.js';
 
 /**
@@ -118,10 +118,10 @@ export class Parser {
         return this.parseEndLoopNode(token);
 
       case 'IF':
-        return this.parseIfNode(token);
+        return this.parseCondBlockNode(token, 'if');
 
       case 'UNLESS':
-        return this.parseUnlessNode(token);
+        return this.parseCondBlockNode(token, 'unless');
 
       case 'ELSE':
         return this.parseElseNode(token);
@@ -235,23 +235,18 @@ export class Parser {
   }
 
   /**
-   * Parse IF token and its body
+   * Parse IF or UNLESS token and its body
    */
-  private parseIfNode(token: Token): ParseNode {
-    if (token.type !== 'IF') {
-      throw createError('Expected IF token', this.context.filename, token.line);
-    }
-
+  private parseCondBlockNode(token: Token, conditionType: 'if' | 'unless'): ParseNode {
+    const blockType = conditionType === 'if' ? 'IF' : 'UNLESS';
     const conditionName = token.name ?? '';
 
-    // Push IF onto block stack
     this.context.blockStack.push({
-      type: 'IF',
+      type: blockType,
       name: conditionName,
       startPos: this.context.pos
     });
 
-    // Parse IF body
     const consequent: ParseNode[] = [];
     const alternate: ParseNode[] = [];
     let inElse = false;
@@ -262,19 +257,16 @@ export class Parser {
       const currentToken = this.currentToken();
       if (!currentToken) break;
 
-      // Check for ELSE
       if (currentToken.type === 'ELSE') {
         if (inElse) {
-          throw createError('Multiple ELSE blocks in IF', this.context.filename, currentToken.line);
+          throw createError(`Multiple ELSE blocks in ${blockType}`, this.context.filename, currentToken.line);
         }
         inElse = true;
         this.context.pos += 1;
         continue;
       }
 
-      // Check for ENDIF
       if (currentToken.type === 'ENDIF') {
-        // Pop from block stack
         const popped = this.context.blockStack.pop();
         if (popped?.type !== 'IF' && popped?.type !== 'UNLESS') {
           throw createError(
@@ -284,17 +276,15 @@ export class Parser {
           );
         }
 
-        // Create CondNode with consequent/alternate bodies
         return {
           type: 'COND',
           name: conditionName,
-          condition: 'if',
+          condition: conditionType,
           consequent,
           alternate: alternate.length > 0 ? alternate : undefined
         };
       }
 
-      // Parse body token
       const node = this.parseToken(currentToken);
       if (node) {
         if (inElse) {
@@ -307,86 +297,7 @@ export class Parser {
       this.context.pos += 1;
     }
 
-    // Reached end without ENDIF
-    throw createError(`Unclosed IF block for "${conditionName}"`, this.context.filename, token.line);
-  }
-
-  /**
-   * Parse UNLESS token and its body
-   * UNLESS is like IF but with negated condition
-   */
-  private parseUnlessNode(token: Token): ParseNode {
-    if (token.type !== 'UNLESS') {
-      throw createError('Expected UNLESS token', this.context.filename, token.line);
-    }
-
-    const conditionName = token.name ?? '';
-
-    // Push UNLESS onto block stack
-    this.context.blockStack.push({
-      type: 'UNLESS',
-      name: conditionName,
-      startPos: this.context.pos
-    });
-
-    // Parse UNLESS body
-    const consequent: ParseNode[] = [];
-    const alternate: ParseNode[] = [];
-    let inElse = false;
-
-    this.context.pos += 1;
-
-    while (this.context.pos < this.context.tokens.length) {
-      const currentToken = this.currentToken();
-      if (!currentToken) break;
-
-      // Check for ELSE
-      if (currentToken.type === 'ELSE') {
-        if (inElse) {
-          throw createError('Multiple ELSE blocks in UNLESS', this.context.filename, currentToken.line);
-        }
-        inElse = true;
-        this.context.pos += 1;
-        continue;
-      }
-
-      // Check for ENDIF
-      if (currentToken.type === 'ENDIF') {
-        // Pop from block stack
-        const popped = this.context.blockStack.pop();
-        if (popped?.type !== 'UNLESS' && popped?.type !== 'IF') {
-          throw createError(
-            `Mismatched ENDIF - expected end of ${popped?.type ?? 'unknown'}`,
-            this.context.filename,
-            currentToken.line
-          );
-        }
-
-        // Create CondNode with consequent/alternate bodies (UNLESS uses 'unless' condition)
-        return {
-          type: 'COND',
-          name: conditionName,
-          condition: 'unless',
-          consequent,
-          alternate: alternate.length > 0 ? alternate : undefined
-        };
-      }
-
-      // Parse body token
-      const node = this.parseToken(currentToken);
-      if (node) {
-        if (inElse) {
-          alternate.push(node);
-        } else {
-          consequent.push(node);
-        }
-      }
-
-      this.context.pos += 1;
-    }
-
-    // Reached end without ENDIF
-    throw createError(`Unclosed UNLESS block for "${conditionName}"`, this.context.filename, token.line);
+    throw createError(`Unclosed ${blockType} block for "${conditionName}"`, this.context.filename, token.line);
   }
 
   /**
@@ -412,18 +323,11 @@ export class Parser {
    * If we encounter an INCLUDE token here, it means include preprocessing wasn't done.
    * This should not happen in normal operation.
    */
-  private parseIncludeNode(token: Token): ParseNode | null {
-    if (token.type !== 'INCLUDE') {
-      throw createError('Expected INCLUDE token', this.context.filename, token.line);
-    }
-
-    // INCLUDE should be processed during template loading, not parsing
-    // If we reach here, includes were disabled or preprocessing failed
-    throw createError(
-      `TMPL_INCLUDE tag found but not processed. This indicates includes are disabled or preprocessing failed: ${token.name ?? 'unknown'}`,
-      this.context.filename,
-      token.line
-    );
+  private parseIncludeNode(_token: Token): ParseNode | null {
+    // INCLUDE tags are normally expanded during preprocessing.
+    // If we reach here, includes were disabled (no_includes: true).
+    // Silently ignore the tag, matching Perl behavior.
+    return { type: 'NOOP' };
   }
 
   /**

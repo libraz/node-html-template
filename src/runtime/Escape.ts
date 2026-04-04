@@ -47,15 +47,6 @@ const HTML_ESCAPE_REGEX = /[&"'<>]/g;
  * ```
  */
 export function escapeHtml(str: string): string {
-  // Fast path: if no escapable characters, return as-is
-  if (!HTML_ESCAPE_REGEX.test(str)) {
-    return str;
-  }
-
-  // Reset regex lastIndex for reuse
-  HTML_ESCAPE_REGEX.lastIndex = 0;
-
-  // Use lookup table for replacement (fastest method)
   return str.replace(HTML_ESCAPE_REGEX, (match) => HTML_ESCAPE_TABLE[match] ?? match);
 }
 
@@ -99,14 +90,6 @@ const JS_ESCAPE_REGEX = /[\\"'\n\r\u2028\u2029]/g;
  * ```
  */
 export function escapeJs(str: string): string {
-  // Fast path: if no escapable characters, return as-is
-  if (!JS_ESCAPE_REGEX.test(str)) {
-    return str;
-  }
-
-  // Reset regex lastIndex for reuse
-  JS_ESCAPE_REGEX.lastIndex = 0;
-
   // Use lookup table for replacement
   return str.replace(JS_ESCAPE_REGEX, (match) => JS_ESCAPE_TABLE[match] ?? match);
 }
@@ -182,7 +165,7 @@ export function escapeUrl(str: string): string {
  * // Returns: 'no escaping'
  * ```
  */
-export function escape(str: string, escapeType: EscapeType): string {
+export function escapeValue(str: string, escapeType: EscapeType): string {
   switch (escapeType) {
     case 'html':
       return escapeHtml(str);

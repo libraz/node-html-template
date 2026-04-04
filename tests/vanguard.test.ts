@@ -3,7 +3,7 @@
  * Tests for legacy %VAR% syntax
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('Vanguard compatibility mode', () => {
@@ -69,11 +69,7 @@ describe('Vanguard compatibility mode', () => {
         vanguard_compatibility_mode: true
       });
 
-      tmpl.param('items', [
-        { item: 'a' },
-        { item: 'b' },
-        { item: 'c' }
-      ]);
+      tmpl.param('items', [{ item: 'a' }, { item: 'b' }, { item: 'c' }]);
       expect(tmpl.output()).toBe('a b c ');
     });
 

@@ -11,10 +11,9 @@
  * @module parser/IncludeProcessor
  */
 
-/* eslint-disable no-use-before-define */
 // processIncludesRecursive and loadIncludeFile are mutually recursive
 
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import type { HTMLTemplateOptions } from '../types.js';
 import { resolveFile } from '../utils/FileResolver.js';
 import { readFileWithEncoding } from '../utils/encoding.js';

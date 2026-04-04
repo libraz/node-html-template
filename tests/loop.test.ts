@@ -3,7 +3,7 @@
  * Port of Perl HTML::Template TMPL_LOOP tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('TMPL_LOOP Tests', () => {
@@ -12,11 +12,7 @@ describe('TMPL_LOOP Tests', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="value"></TMPL_LOOP>'
       });
-      tmpl.param('items', [
-        { value: 'a' },
-        { value: 'b' },
-        { value: 'c' }
-      ]);
+      tmpl.param('items', [{ value: 'a' }, { value: 'b' }, { value: 'c' }]);
       expect(tmpl.output()).toBe('abc');
     });
 
@@ -62,10 +58,7 @@ describe('TMPL_LOOP Tests', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items">Item: <TMPL_VAR NAME="name">\n</TMPL_LOOP>'
       });
-      tmpl.param('items', [
-        { name: 'foo' },
-        { name: 'bar' }
-      ]);
+      tmpl.param('items', [{ name: 'foo' }, { name: 'bar' }]);
       expect(tmpl.output()).toBe('Item: foo\nItem: bar\n');
     });
   });
@@ -95,7 +88,8 @@ describe('TMPL_LOOP Tests', () => {
 
     it('should handle deeply nested loops', () => {
       const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_LOOP NAME="l1"><TMPL_LOOP NAME="l2"><TMPL_LOOP NAME="l3"><TMPL_VAR NAME="v"></TMPL_LOOP></TMPL_LOOP></TMPL_LOOP>'
+        scalarref:
+          '<TMPL_LOOP NAME="l1"><TMPL_LOOP NAME="l2"><TMPL_LOOP NAME="l3"><TMPL_VAR NAME="v"></TMPL_LOOP></TMPL_LOOP></TMPL_LOOP>'
       });
       tmpl.param('l1', [
         {
@@ -149,7 +143,8 @@ describe('TMPL_LOOP Tests', () => {
 
     it('should provide __odd__ variable', () => {
       const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="__counter__"><TMPL_IF NAME="__odd__">O</TMPL_IF> </TMPL_LOOP>',
+        scalarref:
+          '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="__counter__"><TMPL_IF NAME="__odd__">O</TMPL_IF> </TMPL_LOOP>',
         loop_context_vars: true
       });
       tmpl.param('items', [{}, {}, {}, {}]);
@@ -158,7 +153,8 @@ describe('TMPL_LOOP Tests', () => {
 
     it('should provide __even__ variable', () => {
       const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="__counter__"><TMPL_IF NAME="__even__">E</TMPL_IF> </TMPL_LOOP>',
+        scalarref:
+          '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="__counter__"><TMPL_IF NAME="__even__">E</TMPL_IF> </TMPL_LOOP>',
         loop_context_vars: true
       });
       tmpl.param('items', [{}, {}, {}, {}]);
@@ -229,7 +225,8 @@ describe('TMPL_LOOP Tests', () => {
 
     it('should handle nested loops with global_vars', () => {
       const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_LOOP NAME="outer"><TMPL_VAR NAME="top">.<TMPL_LOOP NAME="inner"><TMPL_VAR NAME="top"><TMPL_VAR NAME="mid"></TMPL_LOOP></TMPL_LOOP>',
+        scalarref:
+          '<TMPL_LOOP NAME="outer"><TMPL_VAR NAME="top">.<TMPL_LOOP NAME="inner"><TMPL_VAR NAME="top"><TMPL_VAR NAME="mid"></TMPL_LOOP></TMPL_LOOP>',
         global_vars: true
       });
       tmpl.param('top', 'T');

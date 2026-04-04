@@ -3,7 +3,7 @@
  * Port of Perl HTML::Template basic functionality tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 describe('Basic Template Functionality', () => {
@@ -193,11 +193,7 @@ describe('Basic Template Functionality', () => {
   describe('Array source', () => {
     it('should join array lines with newlines', () => {
       const tmpl = new HTMLTemplate({
-        arrayref: [
-          'Line 1',
-          '<TMPL_VAR NAME="foo">',
-          'Line 3'
-        ]
+        arrayref: ['Line 1', '<TMPL_VAR NAME="foo">', 'Line 3']
       });
       tmpl.param('foo', 'Line 2');
       expect(tmpl.output()).toBe('Line 1\nLine 2\nLine 3');

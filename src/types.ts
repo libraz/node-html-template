@@ -5,7 +5,7 @@
  * @packageDocumentation
  */
 
-import type { Readable, Writable } from 'stream';
+import type { Readable, Writable } from 'node:stream';
 
 // ============================================================================
 // Public Types - 100% compatible with Perl HTML::Template v2.98
@@ -33,8 +33,8 @@ export type LazyValue = () => string | number | boolean | null | undefined;
  * Single loop iteration data
  * Each key-value pair represents a parameter available within the loop
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type LoopDataItem = Record<string, any>; // Will be refined to ParamValue after definition
+// biome-ignore lint/suspicious/noExplicitAny: loop data items can contain arbitrary values
+export type LoopDataItem = Record<string, any>;
 
 /**
  * Lazy loop callback for TMPL_LOOP
@@ -574,19 +574,6 @@ export interface HTMLTemplateOptions {
   default_escape?: EscapeType;
 }
 
-/**
- * Internal normalized options with all defaults applied
- * Used internally to ensure consistent option handling
- * @internal
- */
-export type NormalizedOptions = Required<Omit<HTMLTemplateOptions, 'type' | 'source'>> & {
-  // Normalized source (always one of these)
-  filename?: string;
-  scalarref?: string;
-  arrayref?: string[];
-  filehandle?: Readable;
-};
-
 // ============================================================================
 // Internal Types - Used by parser and runtime
 // ============================================================================
@@ -675,7 +662,6 @@ export interface NoopNode extends BaseParseNode {
 export interface LoopNode extends BaseParseNode {
   type: 'LOOP';
   name: string;
-  // eslint-disable-next-line no-use-before-define
   body: ParseNode[]; // Loop body nodes (recursive structure)
 }
 
@@ -688,9 +674,7 @@ export interface CondNode extends BaseParseNode {
   type: 'COND';
   name: string;
   condition: 'if' | 'unless';
-  // eslint-disable-next-line no-use-before-define
   consequent: ParseNode[]; // Nodes when condition is true (recursive structure)
-  // eslint-disable-next-line no-use-before-define
   alternate?: ParseNode[]; // Nodes when condition is false (recursive structure)
 }
 
@@ -709,9 +693,3 @@ export interface CacheEntry {
   mtimes: Map<string, number>; // File path -> mtime mapping
   key: string;
 }
-
-/**
- * Parameter map - maps parameter names to nodes
- * @internal
- */
-export type ParamMap = Map<string, VarNode | LoopNode>;
