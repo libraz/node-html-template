@@ -4,13 +4,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 
-Complete TypeScript/ESM port of Perl's **HTML::Template v2.98** with 100% API compatibility.
+TypeScript/ESM port of Perl's **HTML::Template v2.98** with compatibility for the core API and template syntax.
 
 A fast, powerful, and flexible template engine designed for web applications. Perfect for migrating legacy Perl applications to modern JavaScript/TypeScript while maintaining template compatibility.
 
 ## Features
 
-- ✅ **100% Compatible** with Perl HTML::Template v2.98
+- ✅ **Perl-Compatible** with HTML::Template v2.98 core API and syntax
 - ✅ **Type-Safe** - Full TypeScript definitions
 - ✅ **ESM-First** - Modern ES Module support
 - ✅ **Fast** - Highly optimized parser and executor
@@ -288,7 +288,7 @@ interface HTMLTemplateOptions {
   // Template Source (one required)
   filename?: string;           // Load from file
   scalarref?: string;          // Template string
-  arrayref?: string[];         // Template as array of lines
+  arrayref?: string[];         // Template chunks, joined without added separators
   filehandle?: Readable;       // Node.js readable stream
 
   // File System
@@ -317,11 +317,17 @@ interface HTMLTemplateOptions {
   associate?: AssociateObject | AssociateObject[];
 
   // Filters
-  filter?: Filter | Filter[];
+  filter?: Filter | Filter['sub'] | Array<Filter | Filter['sub']>;
 }
 ```
 
 ### Methods
+
+#### `param(): string[]`
+Get all top-level parameter names.
+
+#### `param(name: string): ParamValue | undefined`
+Get a parameter value.
 
 #### `param(name: string, value: ParamValue): void`
 Set a single parameter value.
@@ -341,8 +347,8 @@ Get all top-level parameter names.
 #### `query({ name: string }): 'VAR' | 'LOOP' | undefined`
 Check parameter type.
 
-#### `query({ loop: string }): string[] | undefined`
-Get parameters within a loop.
+#### `query({ loop: string | string[] }): string[]`
+Get parameters within a loop. Throws when the search path does not end in a loop.
 
 #### `clear(): void`
 Clear all parameter values.
@@ -363,7 +369,7 @@ Sample results:
 ## Compatibility
 
 - **Node.js**: >= 22.0.0
-- **Perl HTML::Template**: v2.98 (100% compatible)
+- **Perl HTML::Template**: v2.98-compatible API, except Perl-specific features such as taint mode and IPC::SharedCache.
 
 ## Migration from Perl
 

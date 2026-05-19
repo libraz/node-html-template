@@ -15,16 +15,17 @@
 
 import { readFileSync } from 'node:fs';
 import type { HTMLTemplateOptions } from '../types.js';
+import { parseOpenMode, readFileWithEncoding } from '../utils/encoding.js';
 import { resolveFile } from '../utils/FileResolver.js';
-import { readFileWithEncoding } from '../utils/encoding.js';
 import { createError } from '../utils/helpers.js';
 
 /**
  * Include tag regex pattern
- * Matches: <TMPL_INCLUDE NAME="filename"> or <!-- TMPL_INCLUDE NAME="filename" -->
+ * Matches: <TMPL_INCLUDE NAME="filename">, <TMPL_INCLUDE filename>, or HTML comment form
  * Note: Not using /g flag - we create new regex instances for each call
  */
-const INCLUDE_PATTERN = /<\s*(?:!--\s*)?TMPL_INCLUDE\s+NAME\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))\s*(?:--\s*)?>/i;
+const INCLUDE_PATTERN = /<\s*(?:!--\s*)?TMPL_INCLUDE\s+([^>]*?)\s*(?:--\s*)?>/i;
+const INCLUDE_NAME_ATTR = /NAME\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i;
 
 /**
  * Include processing context
@@ -112,7 +113,7 @@ function processIncludesRecursive(source: string, context: IncludeContext): stri
 
   result = result.replace(includeRegex, (_match, quoted1, quoted2, unquoted) => {
     // Get filename from match (can be in quoted1, quoted2, or unquoted)
-    const filename = quoted1 ?? quoted2 ?? unquoted ?? '';
+    const filename = getIncludeFilename(quoted1 ?? quoted2 ?? unquoted ?? '');
 
     if (!filename) {
       throw createError('TMPL_INCLUDE requires NAME attribute');
@@ -132,6 +133,16 @@ function processIncludesRecursive(source: string, context: IncludeContext): stri
   });
 
   return result;
+}
+
+function getIncludeFilename(attrString: string): string {
+  const match = attrString.match(INCLUDE_NAME_ATTR);
+  if (match) {
+    return match[1] ?? match[2] ?? match[3] ?? '';
+  }
+
+  const trimmed = attrString.trim();
+  return /^[^\s=]+$/.test(trimmed) ? trimmed : '';
 }
 
 /**
@@ -167,10 +178,12 @@ function loadIncludeFile(filename: string, context: IncludeContext): string {
   if (context.options.utf8) {
     content = readFileWithEncoding(filepath, 'utf-8');
   } else if (context.options.open_mode) {
-    content = readFileWithEncoding(filepath, context.options.open_mode);
+    content = readFileWithEncoding(filepath, parseOpenMode(context.options.open_mode));
   } else {
     content = readFileSync(filepath, 'utf-8');
   }
+
+  content = applyIncludeFilters(content, context.options);
 
   // Process nested includes
   const prevFile = context.currentFile;
@@ -186,4 +199,37 @@ function loadIncludeFile(filename: string, context: IncludeContext): string {
   context.processing.delete(filepath);
 
   return processed;
+}
+
+function applyIncludeFilters(source: string, options: HTMLTemplateOptions): string {
+  if (!options.filter) {
+    return source;
+  }
+
+  const filters = Array.isArray(options.filter) ? options.filter : [options.filter];
+  let filtered: string | string[] = source;
+
+  for (const filter of filters) {
+    if (typeof filter === 'function') {
+      if (Array.isArray(filtered)) {
+        filtered = filtered.join('');
+      }
+      filtered = filter(filtered);
+      continue;
+    }
+
+    if (filter.format === 'array') {
+      if (typeof filtered === 'string') {
+        filtered = filtered.split(/(?<=\n)/);
+      }
+      filtered = filter.sub(filtered);
+    } else {
+      if (Array.isArray(filtered)) {
+        filtered = filtered.join('');
+      }
+      filtered = filter.sub(filtered);
+    }
+  }
+
+  return Array.isArray(filtered) ? filtered.join('') : filtered;
 }

@@ -21,6 +21,8 @@ import { MemoryCache } from './MemoryCache.js';
  * Provides unified interface to memory and file caches
  */
 export class CacheManager {
+  private static memoryCaches = new Map<string, MemoryCache>();
+
   /**
    * Memory cache instance (if enabled)
    */
@@ -52,7 +54,13 @@ export class CacheManager {
 
     // Initialize memory cache if enabled
     if (options.cache || options.blind_cache || options.double_file_cache) {
-      this.memoryCache = new MemoryCache(options.blind_cache ?? false);
+      const cacheName = options.blind_cache ? 'blind' : 'checked';
+      let memoryCache = CacheManager.memoryCaches.get(cacheName);
+      if (!memoryCache) {
+        memoryCache = new MemoryCache(options.blind_cache ?? false);
+        CacheManager.memoryCaches.set(cacheName, memoryCache);
+      }
+      this.memoryCache = memoryCache;
       if (this.debug) {
         console.error('[CacheManager] Memory cache enabled (blind:', options.blind_cache, ')');
       }

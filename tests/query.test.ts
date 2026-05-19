@@ -120,6 +120,24 @@ describe('query() method', () => {
 
       expect(tmpl.query({ name: ['items', 'name'] })).toBe('VAR');
     });
+
+    it('should require array paths to follow each nested loop exactly', () => {
+      const tmpl = new HTMLTemplate({
+        scalarref: `
+          <TMPL_LOOP NAME="outer">
+            <TMPL_LOOP NAME="inner">
+              <TMPL_VAR NAME="only_inner">
+            </TMPL_LOOP>
+            <TMPL_VAR NAME="outer_var">
+          </TMPL_LOOP>
+        `
+      });
+
+      expect(tmpl.query({ name: ['outer', 'inner', 'only_inner'] })).toBe('VAR');
+      expect(tmpl.query({ name: ['outer', 'missing', 'only_inner'] })).toBeUndefined();
+      expect(tmpl.query({ loop: ['outer', 'inner'] })).toEqual(['only_inner']);
+      expect(() => tmpl.query({ loop: ['outer', 'missing'] })).toThrow(/doesn't end in a TMPL_LOOP/);
+    });
   });
 
   describe('Query loop parameters', () => {
@@ -132,13 +150,12 @@ describe('query() method', () => {
       expect(result).toEqual(['name', 'value']);
     });
 
-    it('should return undefined for nonexistent loop', () => {
+    it('should throw for nonexistent loop', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="name"></TMPL_LOOP>'
       });
 
-      const result = tmpl.query({ loop: 'nonexistent' });
-      expect(result).toBeUndefined();
+      expect(() => tmpl.query({ loop: 'nonexistent' })).toThrow(/doesn't end in a TMPL_LOOP/);
     });
 
     it('should return parameters in nested loop', () => {

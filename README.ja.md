@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 
-Perl の **HTML::Template v2.98** の完全な TypeScript/ESM 移植版。100% API 互換。
+Perl の **HTML::Template v2.98** のコア API とテンプレート構文に互換性を持つ TypeScript/ESM 移植版。
 
 高速で強力、柔軟性の高いテンプレートエンジン。レガシー Perl アプリケーションを現代的な JavaScript/TypeScript に移行する際、テンプレートの互換性を維持しながら移行できます。
 
@@ -12,7 +12,7 @@ Perl の **HTML::Template v2.98** の完全な TypeScript/ESM 移植版。100% A
 
 ## 特徴
 
-- ✅ **100% 互換** - Perl HTML::Template v2.98 と完全互換
+- ✅ **Perl 互換** - Perl HTML::Template v2.98 のコア API と構文に互換
 - ✅ **型安全** - 完全な TypeScript 定義
 - ✅ **ESM ファースト** - モダンな ES Module サポート
 - ✅ **高速** - 高度に最適化されたパーサーと実行エンジン
@@ -297,7 +297,7 @@ yarn bench
 ## 互換性
 
 - **Node.js**: >= 22.0.0
-- **Perl HTML::Template**: v2.98（100% 互換）
+- **Perl HTML::Template**: v2.98 互換（Taint mode や IPC::SharedCache など Perl 固有機能を除く）
 
 ## Perl からの移行
 

@@ -11,7 +11,7 @@
  * @module cache/FileCache
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CacheEntry, ParseNode } from '../types.js';
 import { validateMtimes } from '../utils/FileResolver.js';
@@ -93,7 +93,7 @@ export class FileCache {
 
       // Reconstruct mtimes Map (JSON serializes Map as object)
       if (entry.mtimes && typeof entry.mtimes === 'object') {
-        entry.mtimes = new Map(Object.entries(entry.mtimes));
+        entry.mtimes = new Map(Object.entries(entry.mtimes).map(([filePath, mtime]) => [filePath, Number(mtime)]));
       }
 
       // Validate mtimes

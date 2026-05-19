@@ -13,8 +13,8 @@
  */
 
 import type { AssociateObject, HTMLTemplateOptions, LoopDataItem, ParamValue } from '../types.js';
-import { getFinalLoopData, getFinalValue } from '../utils/LazyValue.js';
 import { isTruthy, normalizeParamName } from '../utils/helpers.js';
+import { getFinalLoopData, getFinalValue } from '../utils/LazyValue.js';
 
 /**
  * Parameter scope
@@ -98,18 +98,16 @@ export class Context {
     const normalizedName = normalizeParamName(name, this.options.case_sensitive ?? false);
 
     // Search current scope
-    const value = this.currentScope.params.get(normalizedName);
-    if (value !== undefined) {
-      return value;
+    if (this.currentScope.params.has(normalizedName)) {
+      return this.currentScope.params.get(normalizedName);
     }
 
     // If global_vars enabled, search parent scopes
     if (this.options.global_vars) {
       let scope = this.currentScope.parent;
       while (scope) {
-        const parentValue = scope.params.get(normalizedName);
-        if (parentValue !== undefined) {
-          return parentValue;
+        if (scope.params.has(normalizedName)) {
+          return scope.params.get(normalizedName);
         }
         scope = scope.parent;
       }
@@ -119,8 +117,22 @@ export class Context {
     for (let i = this.associates.length - 1; i >= 0; i -= 1) {
       const associate = this.associates[i];
       if (associate) {
-        const associateValue = associate.param(name);
-        if (associateValue !== undefined) {
+        let associateName = name;
+        if (!this.options.case_sensitive) {
+          const associateParamNames = associate.param();
+          if (Array.isArray(associateParamNames)) {
+            const matchedName = associateParamNames.find(
+              (paramName): paramName is string =>
+                typeof paramName === 'string' && paramName.toLowerCase() === normalizedName
+            );
+            if (matchedName) {
+              associateName = matchedName;
+            }
+          }
+        }
+
+        const associateValue = associate.param(associateName);
+        if (associateValue !== undefined && !Array.isArray(associateValue)) {
           return associateValue;
         }
       }
@@ -278,6 +290,15 @@ export class Context {
    */
   getRootParams(): string[] {
     return Array.from(this.rootScope.params.keys());
+  }
+
+  /**
+   * Add an associate object after construction.
+   *
+   * @param object - Object with a param() method
+   */
+  addAssociate(object: AssociateObject): void {
+    this.associates.push(object);
   }
 
   /**

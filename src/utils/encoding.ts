@@ -144,8 +144,13 @@ export function normalizeEncodingName(name: string): BufferEncoding {
  * @returns Node.js encoding name
  */
 export function parseOpenMode(openMode: string): BufferEncoding {
+  const lowerMode = openMode.toLowerCase();
+  if (lowerMode.includes(':raw')) {
+    return 'latin1';
+  }
+
   // Handle Perl-style encoding specification: '<:encoding(utf8)'
-  const match = openMode.match(/encoding\(([^)]+)\)/);
+  const match = openMode.match(/encoding\(([^)]+)\)/i);
   if (match?.[1]) {
     return normalizeEncodingName(match[1]);
   }

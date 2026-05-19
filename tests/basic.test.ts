@@ -191,12 +191,12 @@ describe('Basic Template Functionality', () => {
   });
 
   describe('Array source', () => {
-    it('should join array lines with newlines', () => {
+    it('should join array lines without adding newlines', () => {
       const tmpl = new HTMLTemplate({
         arrayref: ['Line 1', '<TMPL_VAR NAME="foo">', 'Line 3']
       });
       tmpl.param('foo', 'Line 2');
-      expect(tmpl.output()).toBe('Line 1\nLine 2\nLine 3');
+      expect(tmpl.output()).toBe('Line 1Line 2Line 3');
     });
   });
 

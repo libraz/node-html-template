@@ -72,20 +72,11 @@ describe('TMPL_IF / TMPL_UNLESS Tests', () => {
       expect(tmpl.output()).toBe('');
     });
 
-    it('should treat empty array as false', () => {
+    it('should reject array values for condition-only params', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_IF NAME="foo">yes</TMPL_IF>'
       });
-      tmpl.param('foo', []);
-      expect(tmpl.output()).toBe('');
-    });
-
-    it('should treat non-empty array as true', () => {
-      const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_IF NAME="foo">yes</TMPL_IF>'
-      });
-      tmpl.param('foo', [{ x: 1 }]);
-      expect(tmpl.output()).toBe('yes');
+      expect(() => tmpl.param('foo', [])).toThrow(/parameter is not a TMPL_LOOP/);
     });
   });
 

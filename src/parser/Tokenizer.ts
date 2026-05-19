@@ -57,6 +57,7 @@ export class Tokenizer {
   private context: ParseContext;
 
   private vanguardMode: boolean;
+  private strict: boolean;
 
   /** Running position tracker for O(1) line/col calculation */
   private trackedPos = 0;
@@ -70,7 +71,7 @@ export class Tokenizer {
    * @param filename - Optional filename for error messages
    * @param vanguardMode - Enable Vanguard %VAR% syntax
    */
-  constructor(source: string, filename?: string, vanguardMode = false) {
+  constructor(source: string, filename?: string, vanguardMode = false, strict = true) {
     this.context = {
       line: 1,
       col: 1,
@@ -79,6 +80,7 @@ export class Tokenizer {
       filename
     };
     this.vanguardMode = vanguardMode;
+    this.strict = strict;
   }
 
   /**
@@ -254,7 +256,9 @@ export class Tokenizer {
         return this.createIncludeToken(attrs, position);
 
       default:
-        // Unknown tag type - ignore if strict mode is off
+        if (this.strict) {
+          throw createError(`Syntax error: unknown TMPL tag TMPL_${tagName}`, this.context.filename, position.line);
+        }
         return null;
     }
   }

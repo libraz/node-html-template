@@ -68,7 +68,7 @@ export interface AssociateObject {
    * @param name - Parameter name
    * @returns Parameter value or undefined if not found
    */
-  param(name: string): ParamValue;
+  param(name?: string): ParamValue | string[];
 }
 
 /**
@@ -327,6 +327,44 @@ export interface HTMLTemplateOptions {
   double_file_cache?: boolean;
 
   /**
+   * Enable double caching using shared memory + memory in Perl HTML::Template.
+   *
+   * Node.js has no IPC::SharedCache equivalent in this package, so this option
+   * is accepted for API compatibility but is not implemented.
+   *
+   * @default false
+   */
+  double_cache?: boolean;
+
+  /**
+   * Enable IPC::SharedCache in Perl HTML::Template.
+   *
+   * Node.js has no IPC::SharedCache equivalent in this package, so this option
+   * is accepted for API compatibility but is not implemented.
+   *
+   * @default false
+   */
+  shared_cache?: boolean;
+
+  /**
+   * Enable shared cache debug output.
+   *
+   * Accepted for API compatibility with Perl HTML::Template.
+   *
+   * @default false
+   */
+  shared_cache_debug?: boolean;
+
+  /**
+   * Enable memory debug output.
+   *
+   * Accepted for API compatibility with Perl HTML::Template.
+   *
+   * @default false
+   */
+  memory_debug?: boolean;
+
+  /**
    * Cache lazy variable values
    *
    * Default: `false`
@@ -400,7 +438,7 @@ export interface HTMLTemplateOptions {
    *
    * @example 'utf-16le', 'latin1', 'ascii'
    */
-  open_mode?: BufferEncoding;
+  open_mode?: BufferEncoding | string;
 
   // ========================================
   // Debugging Options
@@ -559,7 +597,7 @@ export interface HTMLTemplateOptions {
    * }
    * ```
    */
-  filter?: Filter | Filter[];
+  filter?: Filter | Filter['sub'] | Array<Filter | Filter['sub']>;
 
   /**
    * Default escape type for all TMPL_VAR

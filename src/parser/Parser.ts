@@ -37,6 +37,11 @@ interface ParserContext {
    * Stack of open blocks (loops and conditionals)
    */
   blockStack: Array<{ type: string; name?: string; startPos: number }>;
+
+  /**
+   * Whether TMPL_INCLUDE tags are forbidden.
+   */
+  noIncludes: boolean;
 }
 
 /**
@@ -52,12 +57,13 @@ export class Parser {
    * @param tokens - Token array from tokenizer
    * @param filename - Optional filename for error messages
    */
-  constructor(tokens: Token[], filename?: string) {
+  constructor(tokens: Token[], filename?: string, noIncludes = false) {
     this.context = {
       pos: 0,
       tokens,
       filename,
-      blockStack: []
+      blockStack: [],
+      noIncludes
     };
   }
 
@@ -323,10 +329,16 @@ export class Parser {
    * If we encounter an INCLUDE token here, it means include preprocessing wasn't done.
    * This should not happen in normal operation.
    */
-  private parseIncludeNode(_token: Token): ParseNode | null {
+  private parseIncludeNode(token: Token): ParseNode | null {
+    if (this.context.noIncludes) {
+      throw createError(
+        'HTML::Template : Illegal attempt to use TMPL_INCLUDE in template file : (no_includes => 1)',
+        this.context.filename,
+        token.line
+      );
+    }
+
     // INCLUDE tags are normally expanded during preprocessing.
-    // If we reach here, includes were disabled (no_includes: true).
-    // Silently ignore the tag, matching Perl behavior.
     return { type: 'NOOP' };
   }
 

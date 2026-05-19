@@ -1,6 +1,6 @@
 /**
  * node-perl-html-template
- * 100% compatible TypeScript/ESM port of Perl's HTML::Template module v2.98
+ * TypeScript/ESM port of Perl's HTML::Template module v2.98 core API and template syntax
  *
  * @packageDocumentation
  * @module node-perl-html-template
@@ -12,18 +12,18 @@ export { HTMLTemplate } from './HTMLTemplate.js';
 
 // Export public types
 export type {
-  HTMLTemplateOptions,
-  EscapeType,
-  LazyValue,
-  LazyLoopValue,
-  LoopDataItem,
-  LoopData,
-  ParamValue,
   AssociateObject,
+  EscapeType,
   Filter,
+  HTMLTemplateOptions,
+  LazyLoopValue,
+  LazyValue,
+  LoopData,
+  LoopDataItem,
   OutputOptions,
-  QueryResult,
-  QueryOptions
+  ParamValue,
+  QueryOptions,
+  QueryResult
 } from './types.js';
 
 // Version

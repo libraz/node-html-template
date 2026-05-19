@@ -148,7 +148,7 @@ describe('filter option', () => {
         format: 'array'
       }
     });
-    expect(tmpl.output()).toBe('line2');
+    expect(tmpl.output()).toBe('line2\n');
   });
 
   it('should apply multiple filters in order', () => {
@@ -329,7 +329,7 @@ describe('type + source constructor', () => {
       source: ['Line1 <TMPL_VAR NAME="x">', 'Line2']
     });
     tmpl.param('x', 'val');
-    expect(tmpl.output()).toBe('Line1 val\nLine2');
+    expect(tmpl.output()).toBe('Line1 valLine2');
   });
 });
 
@@ -363,12 +363,13 @@ describe('output with print_to', () => {
 // ============================================================================
 
 describe('no_includes option', () => {
-  it('should silently ignore INCLUDE tags when no_includes is true', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: 'A<TMPL_INCLUDE NAME="nonexistent.tmpl">B',
-      no_includes: true
-    });
-    expect(tmpl.output()).toBe('AB');
+  it('should throw when INCLUDE tags are used and no_includes is true', () => {
+    expect(() => {
+      new HTMLTemplate({
+        scalarref: 'A<TMPL_INCLUDE NAME="nonexistent.tmpl">B',
+        no_includes: true
+      });
+    }).toThrow(/no_includes => 1/);
   });
 });
 

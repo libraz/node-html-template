@@ -15,7 +15,7 @@ describe('die_on_bad_params option', () => {
 
       expect(() => {
         tmpl.param('bar', 'value');
-      }).toThrow(/param\(\) called for nonexistent parameter.*bar/);
+      }).toThrow(/Attempt to set nonexistent parameter.*bar/);
     });
 
     it('should allow existing parameters', () => {
@@ -49,7 +49,7 @@ describe('die_on_bad_params option', () => {
 
       expect(() => {
         tmpl.param({ foo: '1', bar: '2' });
-      }).toThrow(/param\(\) called for nonexistent parameter.*bar/);
+      }).toThrow(/Attempt to set nonexistent parameter.*bar/);
     });
 
     it('should validate loop names', () => {
@@ -64,7 +64,7 @@ describe('die_on_bad_params option', () => {
       const result = expect(() => {
         tmpl.param('other', [{ item: 'b' }]);
       });
-      result.toThrow(/param\(\) called for nonexistent parameter/);
+      result.toThrow(/Attempt to set nonexistent parameter/);
     });
 
     it('should validate conditional names', () => {
@@ -79,7 +79,7 @@ describe('die_on_bad_params option', () => {
       const result = expect(() => {
         tmpl.param('hide', false);
       });
-      result.toThrow(/param\(\) called for nonexistent parameter/);
+      result.toThrow(/Attempt to set nonexistent parameter/);
     });
 
     it('should validate nested parameters', () => {
@@ -103,7 +103,7 @@ describe('die_on_bad_params option', () => {
       // But truly nonexistent parameters should fail
       expect(() => {
         tmpl.param('nonexistent', 'test');
-      }).toThrow(/param\(\) called for nonexistent parameter/);
+      }).toThrow(/Attempt to set nonexistent parameter/);
     });
   });
 
@@ -184,12 +184,12 @@ describe('die_on_bad_params option', () => {
       const result1 = expect(() => {
         tmpl.param('foobar', 'value');
       });
-      result1.toThrow(/param\(\) called for nonexistent parameter/);
+      result1.toThrow(/Attempt to set nonexistent parameter/);
 
       const result2 = expect(() => {
         tmpl.param('FOOBAR', 'value');
       });
-      result2.toThrow(/param\(\) called for nonexistent parameter/);
+      result2.toThrow(/Attempt to set nonexistent parameter/);
     });
   });
 
@@ -234,7 +234,7 @@ describe('die_on_bad_params option', () => {
       const result = expect(() => {
         tmpl.param('nonexistent', 'value');
       });
-      result.toThrow(/param\(\) called for nonexistent parameter/);
+      result.toThrow(/Attempt to set nonexistent parameter/);
     });
 
     it('should handle parameters in nested structures', () => {
@@ -282,7 +282,7 @@ describe('die_on_bad_params option', () => {
       // But truly nonexistent parameters should fail
       expect(() => {
         tmpl.param('completely_unknown', 'test');
-      }).toThrow(/param\(\) called for nonexistent parameter/);
+      }).toThrow(/Attempt to set nonexistent parameter/);
     });
   });
 });

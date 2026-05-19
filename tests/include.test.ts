@@ -216,14 +216,14 @@ describe('TMPL_INCLUDE', () => {
   });
 
   describe('no_includes option', () => {
-    it('should silently ignore includes when no_includes is true', () => {
-      const tmpl = new HTMLTemplate({
-        scalarref: 'Start <TMPL_INCLUDE NAME="header.tmpl"> End',
-        path: [fixturesPath],
-        no_includes: true
-      });
-      const output = tmpl.output();
-      expect(output).toBe('Start  End');
+    it('should throw when includes are used and no_includes is true', () => {
+      expect(() => {
+        new HTMLTemplate({
+          scalarref: 'Start <TMPL_INCLUDE NAME="header.tmpl"> End',
+          path: [fixturesPath],
+          no_includes: true
+        });
+      }).toThrow(/no_includes => 1/);
     });
   });
 
