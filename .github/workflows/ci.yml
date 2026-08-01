@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags-ignore:
+      - 'v*.*.*'
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'biome.json'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'tsconfig.json'
+      - 'tsconfig.build.json'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'biome.json'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'tsconfig.json'
+      - 'tsconfig.build.json'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - '.github/workflows/ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - run: corepack enable
+      - run: corepack prepare yarn@4.18.0 --activate
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            .yarn/cache
+            node_modules
+          key: ${{ runner.os }}-node${{ matrix.node-version }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-node${{ matrix.node-version }}-yarn-
+
+      - run: yarn install --immutable
+      - run: yarn lint
+      - run: yarn type-check
+      - run: yarn build
+      - run: yarn test:coverage
+
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == '24'
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
