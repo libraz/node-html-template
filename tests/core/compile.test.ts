@@ -242,6 +242,22 @@ describe('render isolation', () => {
 
     expect(output).toBe('OI');
   });
+
+  // Rendering the same compiled template from inside a render of it is the
+  // sharpest test available for shared mutable state: any scope held on the
+  // template rather than on the render would be clobbered by the inner call
+  // and the outer loop would resume in the wrong place.
+  it('survives a render started from inside another render of itself', () => {
+    const template = compile('<TMPL_LOOP NAME="rows">[<TMPL_VAR NAME="cell"><TMPL_VAR NAME="nested">]</TMPL_LOOP>', {
+      defaultEscape: 'none'
+    });
+
+    const output = template.render({
+      rows: [{ cell: 'a', nested: () => template.render({ rows: [{ cell: 'X' }] }) }, { cell: 'b' }]
+    });
+
+    expect(output).toBe('[a[X]][b]');
+  });
 });
 
 describe('renderTo', () => {

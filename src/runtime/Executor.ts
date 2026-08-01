@@ -8,15 +8,15 @@
 import type { ShapeNode } from '../parser/shape.js';
 import type { CondNode, EscapeType, LoopDataItem, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
 import { fastJoin, normalizeParamName } from '../utils/helpers.js';
-import type { Context } from './Context.js';
 import { escapeValue } from './Escape.js';
+import type { RenderState } from './RenderState.js';
 
 /**
  * Settings the executor needs at render time.
  */
 export interface ExecutorOptions {
   /** Reject loop iteration keys the loop body never declares */
-  dieOnBadParams: boolean;
+  strictData: boolean;
 
   /** Whether parameter names keep their case */
   caseSensitive: boolean;
@@ -32,25 +32,23 @@ export interface ExecutorOptions {
 }
 
 /**
- * Renders a parsed template against a runtime context.
+ * Renders a parsed template against a render state.
+ *
+ * The executor holds no scope of its own: the state carries both the parameter
+ * values and the position in the shape tree, and the two advance together.
  */
 export class Executor {
-  private readonly context: Context;
+  private readonly state: RenderState;
 
   private readonly options: ExecutorOptions;
 
-  /** Parameter scope matching the block currently being rendered */
-  private scope: ShapeNode | undefined;
-
   /**
-   * @param context - Runtime context holding parameter values
+   * @param state - Values and scope position for this render
    * @param options - Render-time settings
-   * @param scope - Parameter scope of the template's top level
    */
-  constructor(context: Context, options: ExecutorOptions, scope?: ShapeNode) {
-    this.context = context;
+  constructor(state: RenderState, options: ExecutorOptions) {
+    this.state = state;
     this.options = options;
-    this.scope = scope;
   }
 
   /**
@@ -110,11 +108,10 @@ export class Executor {
    * @returns Rendered text
    */
   private executeVarNode(node: VarNode): string {
-    const value = this.context.resolveVarValue(node.name);
+    const value = this.state.text(node.name);
 
     if (value === undefined) {
-      // HTML::Template::DEF writes the default straight to the output and
-      // skips the escape op, so a DEFAULT is never escaped.
+      // A DEFAULT is written straight to the output and never escaped.
       return node.default ?? '';
     }
 
@@ -132,50 +129,43 @@ export class Executor {
    * @returns Concatenated output of every iteration
    */
   private executeLoopNode(node: LoopNode): string {
-    const loopData = this.context.getLoopData(node.name);
-    if (loopData.length === 0) {
+    const rows = this.state.rows(node.name);
+    if (rows.length === 0) {
       return '';
     }
 
-    const outerScope = this.scope;
-    const loopScope = outerScope?.loops.get(this.normalize(node.name));
+    const bodyShape = this.state.shape?.loops.get(this.normalize(node.name));
     const parts: string[] = [];
 
-    this.scope = loopScope;
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      if (!row) continue;
 
-    try {
-      for (let i = 0; i < loopData.length; i += 1) {
-        const iterationData = loopData[i];
-        if (!iterationData) continue;
+      this.validateRow(row, bodyShape);
 
-        this.validateIteration(iterationData, loopScope);
-
-        this.context.pushScope(iterationData, i, loopData.length);
-        parts.push(this.execute(node.body));
-        this.context.popScope();
-      }
-    } finally {
-      this.scope = outerScope;
+      this.state.enter(row, bodyShape, i, rows.length);
+      parts.push(this.execute(node.body));
+      this.state.leave();
     }
 
     return fastJoin(parts);
   }
 
   /**
-   * Reject iteration keys the loop body never declares.
+   * Reject row keys the loop body never declares.
    *
    * A loop body is its own namespace, so a typo in a row is exactly as much a
    * mistake as one at the top level and is reported the same way.
    *
-   * @param iterationData - One iteration's parameters
-   * @param loopScope - Parameter scope of the loop body
+   * @param row - One iteration's parameters
+   * @param bodyShape - Parameters the loop body declares
    */
-  private validateIteration(iterationData: LoopDataItem, loopScope: ShapeNode | undefined): void {
-    if (!this.options.dieOnBadParams || !loopScope) return;
+  private validateRow(row: LoopDataItem, bodyShape: ShapeNode | undefined): void {
+    if (!this.options.strictData || !bodyShape) return;
 
-    for (const key of Object.keys(iterationData)) {
+    for (const key of Object.keys(row)) {
       const name = this.normalize(key);
-      if (loopScope.decls.has(name)) continue;
+      if (bodyShape.decls.has(name)) continue;
 
       throw new Error(`Attempt to set parameter '${name}', which the loop body does not declare (strictData is on)`);
     }
@@ -188,7 +178,7 @@ export class Executor {
    * @returns Rendered text of the selected branch
    */
   private executeCondNode(node: CondNode): string {
-    const isTrue = this.context.isConditionTrue(node.name);
+    const isTrue = this.state.isTrue(node.name);
     const takeConsequent = node.condition === 'if' ? isTrue : !isTrue;
 
     if (takeConsequent) {

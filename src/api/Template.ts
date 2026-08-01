@@ -10,8 +10,8 @@
  */
 
 import { declKind, type ShapeNode } from '../parser/shape.js';
-import { Context } from '../runtime/Context.js';
 import { Executor } from '../runtime/Executor.js';
+import { RenderState } from '../runtime/RenderState.js';
 import type { EscapeType, ParamValue, ParseNode } from '../types.js';
 import { createError } from '../utils/helpers.js';
 import { maybeCacheLazyLoop, maybeCacheLazyValue } from '../utils/LazyValue.js';
@@ -87,16 +87,11 @@ export class Template<T extends TemplateData = TemplateData> {
    * @returns Rendered text
    */
   render(data: T, options: RenderOptions = {}): string {
-    const context = this.prepare(data, options);
-    const executor = new Executor(
-      context,
-      {
-        dieOnBadParams: options.strictData ?? false,
-        caseSensitive: this.compiled.caseSensitive,
-        defaultEscape: this.compiled.defaultEscape
-      },
-      this.compiled.lookupShape
-    );
+    const executor = new Executor(this.prepare(data, options), {
+      strictData: options.strictData ?? false,
+      caseSensitive: this.compiled.caseSensitive,
+      defaultEscape: this.compiled.defaultEscape
+    });
 
     return executor.execute(this.compiled.nodes);
   }
@@ -113,31 +108,34 @@ export class Template<T extends TemplateData = TemplateData> {
   }
 
   /**
-   * Build the runtime context for one render.
+   * Build the state for one render.
    *
    * @param data - Values for the template's parameters
    * @param options - Settings for this render
-   * @returns Populated context
+   * @returns Populated state
    */
-  private prepare(data: T, options: RenderOptions): Context {
+  private prepare(data: T, options: RenderOptions): RenderState {
     if (options.strictData) {
       this.assertDeclared(data);
     }
 
     const resolve = options.resolve;
-    const context = new Context({
-      caseSensitive: this.compiled.caseSensitive,
-      globalVars: this.compiled.globalVars,
-      loopContextVars: options.loopContextVars ?? false,
-      resolve: resolve ? (name) => resolve(name) as ParamValue : undefined
-    });
+    const state = new RenderState(
+      {
+        caseSensitive: this.compiled.caseSensitive,
+        globalVars: this.compiled.globalVars,
+        loopContextVars: options.loopContextVars ?? false,
+        resolve: resolve ? (name) => resolve(name) as ParamValue : undefined
+      },
+      this.compiled.lookupShape
+    );
 
     const memoize = options.memoizeLazy ?? true;
     for (const [name, value] of Object.entries(data)) {
-      context.setParam(name, this.toParamValue(name, value, memoize));
+      state.set(name, this.toParamValue(name, value, memoize));
     }
 
-    return context;
+    return state;
   }
 
   /**
