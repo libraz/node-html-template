@@ -14,7 +14,18 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./loaders": {
+      "types": "./dist/loaders/index.d.ts",
+      "import": "./dist/loaders.js"
+    },
+    "./codegen": {
+      "types": "./dist/codegen/index.d.ts",
+      "import": "./dist/codegen.js"
+    },
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "html-template-codegen": "./dist/cli.js"
   },
   "files": [
     "dist",

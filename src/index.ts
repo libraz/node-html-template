@@ -27,9 +27,9 @@ export type {
   TemplateShape
 } from './api/types.js';
 export { TemplateNotFoundError } from './loader/errors.js';
-// Template sources
+// Template sources. The filesystem loader lives in the `loaders` subpath so
+// that importing this entry never pulls in `node:fs`.
 export { memoryLoader } from './loader/memory.js';
-export { type NodeFileLoaderOptions, nodeFileLoader } from './loader/nodeFile.js';
 export type { ResolveRequest, SyncTemplateLoader, TemplateLoader, TemplateResource } from './loader/types.js';
 export type { ParamUsage } from './parser/shape.js';
 

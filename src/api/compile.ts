@@ -5,13 +5,13 @@
  */
 
 import { type ExpandOptions, expandIncludes, expandIncludesAsync } from '../compile/expandIncludes.js';
-import { nodeFileLoader } from '../loader/nodeFile.js';
-import type { SyncTemplateLoader, TemplateLoader } from '../loader/types.js';
+import type { ResolveRequest, SyncTemplateLoader } from '../loader/types.js';
 import { stripComments } from '../parser/comments.js';
 import { Parser } from '../parser/Parser.js';
 import { buildShape, withGlobalVars } from '../parser/shape.js';
 import { Tokenizer } from '../parser/Tokenizer.js';
 import { applyFilters } from '../utils/filters.js';
+import { createError } from '../utils/helpers.js';
 import { type CompiledTemplate, Template } from './Template.js';
 import type { AsyncCompileOptions, CompileOptions, IncludeOptions, RenderOptions, TemplateData } from './types.js';
 
@@ -39,7 +39,7 @@ export function compile<T extends TemplateData = TemplateData>(
   const expanded = settings.includes
     ? expandIncludes(prepared, options.filename, {
         ...settings.expand,
-        loader: options.loader ?? defaultLoader(settings.includeOptions)
+        loader: options.loader ?? NO_LOADER
       })
     : { text: prepared, versions: new Map<string, string | undefined>(), segments: [] };
 
@@ -64,7 +64,7 @@ export async function compileAsync<T extends TemplateData = TemplateData>(
   const expanded = settings.includes
     ? await expandIncludesAsync(prepared, options.filename, {
         ...settings.expand,
-        loader: options.loader ?? defaultLoader(settings.includeOptions)
+        loader: options.loader ?? NO_LOADER
       })
     : { text: prepared, versions: new Map<string, string | undefined>(), segments: [] };
 
@@ -135,17 +135,25 @@ function resolveSettings(options: CompileOptions | AsyncCompileOptions): Setting
 }
 
 /**
- * Build the filesystem loader implied by the include settings.
+ * Stands in for a loader that was never configured.
  *
- * @param includeOptions - Include settings
- * @returns Loader reading from disk
+ * There is no default: the core reaches templates only through a loader, which
+ * is what keeps it free of any filesystem dependency. The failure is raised
+ * lazily so a template without includes never needs one.
  */
-function defaultLoader(includeOptions: IncludeOptions): SyncTemplateLoader & TemplateLoader {
-  return nodeFileLoader({
-    paths: includeOptions.paths,
-    searchAllPaths: includeOptions.searchAllPaths
-  });
-}
+const NO_LOADER: SyncTemplateLoader = {
+  sync: true,
+
+  resolve(request: ResolveRequest): string {
+    throw createError(
+      `TMPL_INCLUDE '${request.name}' needs a loader; pass one as the 'loader' option (nodeFileLoader reads from disk)`
+    );
+  },
+
+  read(id: string): never {
+    throw createError(`Cannot read '${id}' without a loader`);
+  }
+};
 
 /**
  * Tokenize, parse and describe an expanded template.

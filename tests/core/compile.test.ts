@@ -189,6 +189,16 @@ describe('includes', () => {
     expect(template.render({})).toBe('included');
   });
 
+  // There is no default loader: the core reaches templates only through one,
+  // which is what keeps it free of any filesystem dependency.
+  it('reports an include with no loader configured', () => {
+    expect(() => compile('<TMPL_INCLUDE NAME="part.tmpl">')).toThrow(/needs a loader/);
+  });
+
+  it('compiles a template with no includes without a loader', () => {
+    expect(compile('<TMPL_VAR NAME="x">').render({ x: 'ok' })).toBe('ok');
+  });
+
   it('rejects includes when they are turned off', () => {
     expect(() => compile('<TMPL_INCLUDE NAME="part.tmpl">', { includes: false })).toThrow();
   });

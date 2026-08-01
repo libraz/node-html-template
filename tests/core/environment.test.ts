@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SyncTemplateLoader, TemplateLoader, TemplateResource } from '../../src/index.js';
 import { Environment, memoryLoader } from '../../src/index.js';
+import { nodeFileLoader } from '../../src/loaders/index.js';
 
 let directory: string;
 
@@ -51,13 +52,13 @@ describe('Environment', () => {
   });
 
   it('reads a template through the loader', () => {
-    const env = new Environment({ includes: { paths: [directory] } });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }) });
 
     expect(env.renderFile('page.tmpl', { name: 'World' })).toBe('Hello World');
   });
 
   it('resolves an include relative to the template that referenced it', () => {
-    const env = new Environment({ includes: { paths: [directory] } });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }) });
 
     expect(env.renderFile('outer.tmpl', {})).toBe('ACB');
   });
@@ -66,6 +67,12 @@ describe('Environment', () => {
     const env = new Environment({ loader: memoryLoader({ 'broken.tmpl': '<TMPL_VAR>' }) });
 
     expect(() => env.compileFile('broken.tmpl')).toThrow(/broken\.tmpl/);
+  });
+
+  it('rejects reading by name without a loader', () => {
+    const env = new Environment();
+
+    expect(() => env.compileFile('page.tmpl')).toThrow(/no loader/);
   });
 
   it('rejects a synchronous call on an asynchronous loader', () => {
@@ -77,14 +84,14 @@ describe('Environment', () => {
 
 describe('Environment caching', () => {
   it('is off unless asked for', () => {
-    const env = new Environment({ includes: { paths: [directory] } });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }) });
 
     expect(env.compileFile('page.tmpl')).not.toBe(env.compileFile('page.tmpl'));
     expect(env.cacheSize).toBe(0);
   });
 
   it('reuses a compiled template', () => {
-    const env = new Environment({ includes: { paths: [directory] }, cache: true });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }), cache: true });
 
     expect(env.compileFile('page.tmpl')).toBe(env.compileFile('page.tmpl'));
     expect(env.cacheSize).toBe(1);
@@ -95,7 +102,7 @@ describe('Environment caching', () => {
     const file = join(scratch, 'changing.tmpl');
     writeFileSync(file, 'before');
 
-    const env = new Environment({ includes: { paths: [scratch] }, cache: true });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [scratch] }), cache: true });
     expect(env.renderFile('changing.tmpl', {})).toBe('before');
 
     writeFileSync(file, 'after');
@@ -111,7 +118,7 @@ describe('Environment caching', () => {
     writeFileSync(join(scratch, 'root.tmpl'), '[<TMPL_INCLUDE NAME="child.tmpl">]');
     writeFileSync(join(scratch, 'child.tmpl'), 'before');
 
-    const env = new Environment({ includes: { paths: [scratch] }, cache: true });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [scratch] }), cache: true });
     expect(env.renderFile('root.tmpl', {})).toBe('[before]');
 
     writeFileSync(join(scratch, 'child.tmpl'), 'after');
@@ -127,7 +134,7 @@ describe('Environment caching', () => {
     const file = join(scratch, 'blind.tmpl');
     writeFileSync(file, 'before');
 
-    const env = new Environment({ includes: { paths: [scratch] }, cache: { revalidate: false } });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [scratch] }), cache: { revalidate: false } });
     expect(env.renderFile('blind.tmpl', {})).toBe('before');
 
     writeFileSync(file, 'after');
@@ -139,7 +146,7 @@ describe('Environment caching', () => {
   });
 
   it('keeps compilations under different settings apart', () => {
-    const env = new Environment({ includes: { paths: [directory] }, cache: true });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }), cache: true });
 
     const escaped = env.compileFile('page.tmpl', { defaultEscape: 'html' });
     const raw = env.compileFile('page.tmpl', { defaultEscape: 'none' });
@@ -152,7 +159,7 @@ describe('Environment caching', () => {
   // A filter rewrites the source, and a function carries no identity a key can
   // record, so caching one would let two different filters share an entry.
   it('never reuses a filtered compilation', () => {
-    const env = new Environment({ includes: { paths: [directory] }, cache: true });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }), cache: true });
 
     const upper = env.compileFile('page.tmpl', {
       filters: [{ sub: (content) => (content as string).replace('Hello', 'Hi') }]
@@ -183,7 +190,7 @@ describe('Environment caching', () => {
   });
 
   it('forgets everything on demand', () => {
-    const env = new Environment({ includes: { paths: [directory] }, cache: true });
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }), cache: true });
     const before = env.compileFile('page.tmpl');
 
     env.clearCache();

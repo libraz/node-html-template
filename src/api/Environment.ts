@@ -8,7 +8,6 @@
  * @module api/Environment
  */
 
-import { nodeFileLoader } from '../loader/nodeFile.js';
 import type { SyncTemplateLoader, TemplateLoader } from '../loader/types.js';
 import { type CacheOptions, TemplateCache, type Versions } from './cache.js';
 import { compile, compileAsync } from './compile.js';
@@ -20,7 +19,11 @@ import type { CompileOptions, RenderOptions, TemplateData } from './types.js';
  */
 export interface EnvironmentOptions extends Omit<CompileOptions, 'filename' | 'loader'> {
   /**
-   * Where templates are read from. Defaults to the filesystem.
+   * Where templates are read from.
+   *
+   * Required to compile anything by name; without one the environment can
+   * still compile text that has no includes. `nodeFileLoader` from the
+   * `loaders` subpath reads from disk.
    *
    * A loader that answers with promises can only be used through the
    * asynchronous methods.
@@ -41,12 +44,15 @@ export interface EnvironmentOptions extends Omit<CompileOptions, 'filename' | 'l
  *
  * @example
  * ```ts
- * const env = new Environment({ includes: { paths: ['./views'] }, cache: true });
+ * import { Environment } from '@libraz/html-template';
+ * import { nodeFileLoader } from '@libraz/html-template/loaders';
+ *
+ * const env = new Environment({ loader: nodeFileLoader({ paths: ['./views'] }), cache: true });
  * const html = env.renderFile('page.tmpl', { title: 'Hello' });
  * ```
  */
 export class Environment {
-  private readonly loader: TemplateLoader;
+  private readonly loader: TemplateLoader | undefined;
 
   private readonly defaults: Omit<CompileOptions, 'filename' | 'loader'>;
 
@@ -58,7 +64,7 @@ export class Environment {
   constructor(options: EnvironmentOptions = {}) {
     const { loader, cache, ...defaults } = options;
 
-    this.loader = loader ?? nodeFileLoader(includePaths(defaults));
+    this.loader = loader;
     this.defaults = defaults;
     this.cache = cache ? new TemplateCache(cache === true ? {} : cache) : undefined;
   }
@@ -84,6 +90,7 @@ export class Environment {
    */
   compileFile<T extends TemplateData = TemplateData>(name: string, options: CompileOptions = {}): Template<T> {
     const loader = this.syncLoader();
+
     const id = loader.resolve({ name, include: false });
     const key = this.cacheKey(id, options);
 
@@ -111,7 +118,7 @@ export class Environment {
     name: string,
     options: CompileOptions = {}
   ): Promise<Template<T>> {
-    const loader = this.loader;
+    const loader = this.requireLoader();
     const id = await loader.resolve({ name, include: false });
     const key = this.cacheKey(id, options);
 
@@ -199,7 +206,23 @@ export class Environment {
    * @returns Settings for the compiler
    */
   private settings(options: CompileOptions): CompileOptions {
-    return { ...this.defaults, ...options, loader: (options.loader ?? this.loader) as SyncTemplateLoader };
+    return { ...this.defaults, ...options, loader: (options.loader ?? this.loader) as SyncTemplateLoader | undefined };
+  }
+
+  /**
+   * Return the configured loader.
+   *
+   * @returns The loader
+   * @throws Error when the environment has none
+   */
+  private requireLoader(): TemplateLoader {
+    if (!this.loader) {
+      throw new Error(
+        "This environment has no loader, so it cannot read templates by name; pass one as the 'loader' option"
+      );
+    }
+
+    return this.loader;
   }
 
   /**
@@ -209,11 +232,13 @@ export class Environment {
    * @throws Error when the loader is asynchronous
    */
   private syncLoader(): SyncTemplateLoader {
-    if (!this.loader.sync) {
+    const loader = this.requireLoader();
+
+    if (!loader.sync) {
       throw new Error('This environment has an asynchronous loader; use compileFileAsync or renderFileAsync');
     }
 
-    return this.loader as SyncTemplateLoader;
+    return loader as SyncTemplateLoader;
   }
 
   /**
@@ -316,19 +341,4 @@ function staleCandidates(versions: Versions): Array<[string, string]> {
   }
 
   return candidates;
-}
-
-/**
- * Derive filesystem loader settings from the include options.
- *
- * @param options - Compile defaults
- * @returns Loader settings
- */
-function includePaths(options: Omit<CompileOptions, 'filename' | 'loader'>): {
-  paths?: readonly string[];
-  searchAllPaths?: boolean;
-} {
-  const includes = typeof options.includes === 'object' ? options.includes : {};
-
-  return { paths: includes.paths, searchAllPaths: includes.searchAllPaths };
 }
