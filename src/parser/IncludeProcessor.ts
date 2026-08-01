@@ -14,12 +14,12 @@ import { applyFilters } from '../utils/filters.js';
 import { createError } from '../utils/helpers.js';
 import { parseTagAttributes, TagSyntaxError } from './attributes.js';
 import { stripComments } from './comments.js';
+import { createIncludePattern } from './tagPattern.js';
 
 /**
  * Matches a TMPL_INCLUDE tag, capturing its attribute text.
- * Kept in step with the tokenizer's tag pattern.
  */
-const INCLUDE_REGEX = /<\s*(?:!--\s*)?TMPL_INCLUDE\s*([^>]*?)\s*(?:--\s*)?\/?\s*>/gi;
+const INCLUDE_REGEX = createIncludePattern();
 
 /**
  * Result of expanding every include in a template.

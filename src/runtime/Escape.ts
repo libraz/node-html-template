@@ -99,12 +99,6 @@ export function escapeJs(str: string): string {
 // ============================================================================
 
 /**
- * Characters that should NOT be encoded in URL escaping
- * Letters, numbers, and specific punctuation: _ . -
- */
-const URL_SAFE_CHARS = /[A-Za-z0-9._-]/;
-
-/**
  * Escape URL component
  * Compatible with Perl HTML::Template ESCAPE=URL
  *
@@ -178,70 +172,5 @@ export function escapeValue(str: string, escapeType: EscapeType): string {
     default:
       // Exhaustive check - TypeScript ensures this never happens
       return str;
-  }
-}
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Check if a string needs HTML escaping
- * Fast check without actually escaping
- *
- * @param str - String to check
- * @returns True if string contains HTML-escapable characters
- */
-export function needsHtmlEscape(str: string): boolean {
-  return HTML_ESCAPE_REGEX.test(str);
-}
-
-/**
- * Check if a string needs JavaScript escaping
- * Fast check without actually escaping
- *
- * @param str - String to check
- * @returns True if string contains JS-escapable characters
- */
-export function needsJsEscape(str: string): boolean {
-  return JS_ESCAPE_REGEX.test(str);
-}
-
-/**
- * Check if a string needs URL escaping
- * Fast check without actually escaping
- *
- * @param str - String to check
- * @returns True if string contains URL-escapable characters
- */
-export function needsUrlEscape(str: string): boolean {
-  // Check if any character is not in safe set
-  for (let i = 0; i < str.length; i++) {
-    if (!URL_SAFE_CHARS.test(str[i] ?? '')) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Check if a string needs escaping based on escape type
- *
- * @param str - String to check
- * @param escapeType - Type of escaping
- * @returns True if string needs escaping
- */
-export function needsEscape(str: string, escapeType: EscapeType): boolean {
-  switch (escapeType) {
-    case 'html':
-      return needsHtmlEscape(str);
-    case 'js':
-      return needsJsEscape(str);
-    case 'url':
-      return needsUrlEscape(str);
-    case 'none':
-      return false;
-    default:
-      return false;
   }
 }

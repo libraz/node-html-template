@@ -13,6 +13,7 @@
 import type { Token } from '../types.js';
 import { createError } from '../utils/helpers.js';
 import { parseTagAttributes, type TagAttributes, TagSyntaxError } from './attributes.js';
+import { createTagPattern } from './tagPattern.js';
 import type { ParseContext } from './types.js';
 
 // ============================================================================
@@ -23,7 +24,7 @@ import type { ParseContext } from './types.js';
  * Matches any TMPL_* tag, in plain or HTML-comment form.
  * Captures: leading slash, tag name, attribute text.
  */
-const TAG_REGEX = /<\s*(?:!--\s*)?(\/?)TMPL_(\w+)\s*([^>]*?)\s*(?:--\s*)?\/?\s*>/gi;
+const TAG_REGEX = createTagPattern();
 
 /**
  * Matches anything that merely looks like a TMPL tag opener, used to tell a
