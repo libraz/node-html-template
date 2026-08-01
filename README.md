@@ -1,22 +1,16 @@
 # @libraz/html-template
 
+[![CI](https://github.com/libraz/node-perl-html-template/actions/workflows/ci.yml/badge.svg)](https://github.com/libraz/node-perl-html-template/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@libraz/html-template.svg)](https://www.npmjs.com/package/@libraz/html-template)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 
-TypeScript/ESM port of Perl's **HTML::Template v2.98** with compatibility for the core API and template syntax.
+Perl HTML::Template's template syntax, with a TypeScript API.
 
-A fast, powerful, and flexible template engine designed for web applications. Perfect for migrating legacy Perl applications to modern JavaScript/TypeScript while maintaining template compatibility.
-
-## Features
-
-- ✅ **Perl-Compatible** with HTML::Template v2.98 core API and syntax
-- ✅ **Type-Safe** - Full TypeScript definitions
-- ✅ **ESM-First** - Modern ES Module support
-- ✅ **Fast** - Highly optimized parser and executor
-- ✅ **Zero Dependencies** - No external runtime dependencies
-- ✅ **Well-Tested** - 240+ tests covering all features
-- ✅ **Secure** - Built-in XSS protection with HTML/URL/JS escaping
+Existing `.tmpl` files render unchanged. The API around them is not a port of
+the Perl one: templates are compiled once and rendered many times, everything a
+render touches is its own, and a template's parameters can be turned into a
+TypeScript interface.
 
 ## Installation
 
@@ -24,425 +18,137 @@ A fast, powerful, and flexible template engine designed for web applications. Pe
 npm install @libraz/html-template
 ```
 
+Node 22 or newer. No runtime dependencies.
+
+## Quick start
+
+```typescript
+import { compile } from '@libraz/html-template';
+
+const template = compile(`
+  <h1><TMPL_VAR NAME="title"></h1>
+  <TMPL_LOOP NAME="items">
+    <p><TMPL_VAR NAME="name">: <TMPL_VAR NAME="value"></p>
+  </TMPL_LOOP>
+`);
+
+const html = template.render({
+  title: 'Hello World',
+  items: [
+    { name: 'Item 1', value: 'Value 1' },
+    { name: 'Item 2', value: 'Value 2' }
+  ]
+});
+```
+
+Compiling is the expensive half, so keep the compiled template and render it as
+often as you like — it is immutable and safe to share across concurrent work.
+
+For a one-off, `render(source, data)` does both in a single call.
+
+## Reading templates from disk
+
+The core reaches templates only through a loader, which is what keeps it free
+of any filesystem dependency. Node's loader lives in its own subpath:
+
+```typescript
+import { Environment } from '@libraz/html-template';
+import { nodeFileLoader } from '@libraz/html-template/loaders';
+
+const env = new Environment({
+  loader: nodeFileLoader({ paths: ['./views'] }),
+  cache: true
+});
+
+const html = env.renderFile('page.tmpl', { title: 'Hello' });
+```
+
+An environment holds the loader, the compile settings and the cache together,
+so nothing has to be configured twice and nothing lives in a process-wide
+global.
+
+## Template syntax
+
+```html
+<TMPL_VAR NAME="title">
+<TMPL_VAR NAME="raw" ESCAPE="none">
+<TMPL_VAR NAME="missing" DEFAULT="fallback">
+
+<TMPL_IF NAME="logged_in">welcome<TMPL_ELSE>please sign in</TMPL_IF>
+<TMPL_UNLESS NAME="empty">there is something here</TMPL_UNLESS>
+
+<TMPL_LOOP NAME="rows"><TMPL_VAR NAME="cell"></TMPL_LOOP>
+
+<TMPL_INCLUDE NAME="header.tmpl">
+<TMPL_COMMENT>never rendered</TMPL_COMMENT>
+```
+
+Every tag also has an HTML comment form — `<!-- TMPL_VAR NAME="x" -->` — for
+templates that have to stay valid HTML on their own.
+
+See the [syntax reference](docs/en/template-syntax.md) for the full set.
+
+## Escaping
+
+Variables are HTML-escaped by default. `ESCAPE="none"` on a tag opts that one
+tag out, and `defaultEscape` at compile time changes the default:
+
+```typescript
+compile('<TMPL_VAR NAME="x">').render({ x: '<b>' }); // '&lt;b&gt;'
+compile('<TMPL_VAR NAME="x">', { defaultEscape: 'none' }).render({ x: '<b>' }); // '<b>'
+```
+
+This is the one place the library deliberately differs from Perl, which escapes
+nothing unless told to. Templates that already write `ESCAPE="html"` keep
+working; templates that relied on raw output need `defaultEscape: 'none'`.
+
+## Generated types
+
+A template declares which names it uses and in what role, which is enough to
+describe the data it expects:
+
 ```bash
-yarn add @libraz/html-template
-```
-
-## Quick Start
-
-```typescript
-import { HTMLTemplate } from '@libraz/html-template';
-
-// From string
-const tmpl = new HTMLTemplate({
-  scalarref: `
-    <h1><TMPL_VAR NAME="title"></h1>
-    <TMPL_LOOP NAME="items">
-      <p><TMPL_VAR NAME="name">: <TMPL_VAR NAME="value"></p>
-    </TMPL_LOOP>
-  `
-});
-
-// Set parameters
-tmpl.param('title', 'Hello World');
-tmpl.param('items', [
-  { name: 'Item 1', value: 'Value 1' },
-  { name: 'Item 2', value: 'Value 2' }
-]);
-
-// Generate output
-console.log(tmpl.output());
-```
-
-## Core Features
-
-### Variables
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: 'Hello <TMPL_VAR NAME="name">!'
-});
-tmpl.param('name', 'World');
-console.log(tmpl.output()); // Hello World!
-```
-
-### Loops
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: `
-    <TMPL_LOOP NAME="users">
-      <p><TMPL_VAR NAME="username"></p>
-    </TMPL_LOOP>
-  `
-});
-
-tmpl.param('users', [
-  { username: 'Alice' },
-  { username: 'Bob' },
-  { username: 'Charlie' }
-]);
-```
-
-### Conditionals
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: `
-    <TMPL_IF NAME="show_message">
-      <p><TMPL_VAR NAME="message"></p>
-    <TMPL_ELSE>
-      <p>No message</p>
-    </TMPL_IF>
-  `
-});
-
-tmpl.param({ show_message: true, message: 'Hello!' });
-```
-
-### Escaping (XSS Protection)
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: `
-    <div><TMPL_VAR NAME="content" ESCAPE="HTML"></div>
-    <a href="?q=<TMPL_VAR NAME="query" ESCAPE="URL">">Link</a>
-    <script>var data = "<TMPL_VAR NAME="data" ESCAPE="JS">";</script>
-  `
-});
-
-tmpl.param({
-  content: '<script>alert("XSS")</script>',  // Escaped
-  query: 'hello world',                       // URL encoded
-  data: 'Some "quoted" text'                  // JS escaped
-});
-```
-
-Valid `ESCAPE` values are `HTML`, `URL`, `JS`, `NONE`, `1` (a shorthand for `HTML`)
-and `0` (a shorthand for `NONE`). Anything else is a parse error, as it is in Perl.
-
-A `DEFAULT` value is written out verbatim and is never escaped, because Perl's
-`HTML::Template::DEF` skips the escape step when it substitutes a default.
-
-### Default Escaping
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: '<TMPL_VAR NAME="html">',
-  default_escape: 'html'  // All vars HTML-escaped by default
-});
-```
-
-`default_escape` only applies to tags that carry no `ESCAPE` attribute. Writing
-`ESCAPE=NONE` (or `ESCAPE=0`) on a tag opts it out of the default.
-
-### Template Comments
-
-```typescript
-// TMPL_COMMENT and TMPL_NOTE blocks are stripped from output
-const tmpl = new HTMLTemplate({
-  scalarref: `
-    Visible content
-    <TMPL_COMMENT>This will not appear in output</TMPL_COMMENT>
-    More visible content
-  `
-});
-```
-
-### File Includes
-
-```typescript
-// template.html
-<TMPL_INCLUDE NAME="header.html">
-<TMPL_VAR NAME="content">
-<TMPL_INCLUDE NAME="footer.html">
+npx html-template-codegen views/ -o src/templates.d.ts
 ```
 
 ```typescript
-const tmpl = new HTMLTemplate({
-  filename: 'template.html',
-  path: ['./templates']  // Search path
-});
-```
-
-### Template Query
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: '<TMPL_VAR NAME="foo"> <TMPL_LOOP NAME="items"><TMPL_VAR NAME="x"></TMPL_LOOP>'
-});
-
-// Get all top-level parameter names
-console.log(tmpl.query());  // ['foo', 'items']
-
-// Check parameter type
-console.log(tmpl.query({ name: 'foo' }));     // 'VAR'
-console.log(tmpl.query({ name: 'items' }));   // 'LOOP'
-
-// Get parameters within a loop
-console.log(tmpl.query({ loop: 'items' }));   // ['x']
-```
-
-## Advanced Features
-
-### Lazy Values
-
-Defer computation until a variable or loop is actually used in the template:
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: '<TMPL_VAR NAME="expensive">',
-  die_on_bad_params: false
-});
-
-// Function is only called when the variable is rendered
-tmpl.param('expensive', () => computeExpensiveValue());
-```
-
-### Associate Objects
-
-Pull parameters from external objects with a `param()` method (CGI.pm compatibility):
-
-```typescript
-const cgi = {
-  param: (name: string) => {
-    if (name === 'user') return 'alice';
-    return undefined;
-  }
-};
-
-const tmpl = new HTMLTemplate({
-  scalarref: '<TMPL_VAR NAME="user">',
-  associate: cgi,
-  die_on_bad_params: false
-});
-```
-
-### Content Filters
-
-Transform template content before parsing:
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: 'hello <TMPL_VAR NAME="name">',
-  filter: {
-    sub: (content) => (content as string).toUpperCase(),
-    format: 'scalar'
-  }
-});
-```
-
-### Vanguard Compatibility Mode
-
-Support for legacy `%VAR%` syntax:
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: 'Hello %name%!',
-  vanguard_compatibility_mode: true
-});
-tmpl.param('name', 'World');
-console.log(tmpl.output());  // Hello World!
-```
-
-### Cache Support
-
-```typescript
-const tmpl = new HTMLTemplate({
-  filename: 'template.html',
-  cache: true  // Enable in-memory caching
-});
-```
-
-### Loop Context Variables
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: `
-    <TMPL_LOOP NAME="items">
-      Item <TMPL_VAR NAME="__counter__">
-      <TMPL_IF NAME="__first__">First!</TMPL_IF>
-      <TMPL_IF NAME="__last__">Last!</TMPL_IF>
-      <TMPL_IF NAME="__odd__">Odd row</TMPL_IF>
-    </TMPL_LOOP>
-  `,
-  loop_context_vars: true
-});
-```
-
-Available context variables: `__first__`, `__last__`, `__inner__`, `__outer__`, `__odd__`, `__even__`, `__counter__` (1-based), `__index__` (0-based).
-
-### Global Variables
-
-```typescript
-const tmpl = new HTMLTemplate({
-  scalarref: `
-    <TMPL_VAR NAME="site_name">
-    <TMPL_LOOP NAME="items">
-      <TMPL_VAR NAME="site_name"> - <TMPL_VAR NAME="item">
-    </TMPL_LOOP>
-  `,
-  global_vars: true  // Access parent scope variables in loops
-});
-```
-
-## API Reference
-
-### Constructor Options
-
-```typescript
-interface HTMLTemplateOptions {
-  // Template Source (one required)
-  filename?: string;           // Load from file
-  scalarref?: string;          // Template string
-  arrayref?: string[];         // Template chunks, joined without added separators
-  filehandle?: Readable;       // Node.js readable stream
-
-  // File System
-  path?: string[];             // Search paths for includes
-  utf8?: boolean;              // Use UTF-8 encoding
-
-  // Behavior
-  case_sensitive?: boolean;    // Case-sensitive parameter names
-  loop_context_vars?: boolean; // Enable __first__, __last__, etc.
-  global_vars?: boolean;       // Access parent vars in loops
-  no_includes?: boolean;       // Disable TMPL_INCLUDE processing
-  max_includes?: number;       // Max include depth (default: 10)
-  die_on_missing_include?: boolean; // Throw on missing includes
-
-  // Error Detection
-  die_on_bad_params?: boolean; // Throw on nonexistent params
-
-  // Escaping
-  default_escape?: 'html' | 'js' | 'url' | 'none';
-
-  // Cache
-  cache?: boolean;             // Enable in-memory cache
-
-  // Compatibility
-  vanguard_compatibility_mode?: boolean; // Enable %VAR% syntax
-  associate?: AssociateObject | AssociateObject[];
-
-  // Filters
-  filter?: Filter | Filter['sub'] | Array<Filter | Filter['sub']>;
+export interface PageData {
+  title?: ScalarSource;
+  items?: RowSource<{
+    name?: ScalarSource;
+  }>;
 }
 ```
 
-### Methods
-
-#### `param(): string[]`
-Get all top-level parameter names.
-
-#### `param(name: string): ParamValue | undefined`
-Get a parameter value.
-
-#### `param(name: string, value: ParamValue): void`
-Set a single parameter value.
-
-#### `param(params: Record<string, ParamValue>): void`
-Set multiple parameters at once.
-
-#### `output(): string`
-Generate and return the rendered template.
-
-#### `output({ print_to: Writable }): void`
-Write rendered output to a stream.
-
-#### `query(): string[]`
-Get all top-level parameter names.
-
-#### `query({ name: string }): 'VAR' | 'LOOP' | undefined`
-Check parameter type.
-
-#### `query({ loop: string | string[] }): string[]`
-Get parameters within a loop. Throws when the search path does not end in a loop.
-
-#### `clear(): void`
-Clear all parameter values.
-
-## Performance
-
-Run benchmarks:
-
-```bash
-yarn bench
-```
-
-Sample results:
-- Simple variable substitution: ~50,000 ops/sec
-- Loop with 100 items: ~5,000 ops/sec
-- Complex template parsing: ~10,000 ops/sec
-
-## Compatibility
-
-- **Node.js**: >= 22.0.0
-- **Perl HTML::Template**: v2.98-compatible API, except Perl-specific features such as taint mode and IPC::SharedCache.
-
-Behaviour is pinned by a suite that replays a shared case set against output
-recorded from Perl HTML::Template 2.98. Re-record it with `yarn goldens:record`
-when you have a Perl install; the recording is committed so CI does not need one.
-
-Points worth knowing when porting templates:
-
-- **Parameter scopes.** Each `TMPL_LOOP` body is its own namespace. `die_on_bad_params`,
-  `param()` with no arguments and `query()` all work against the top-level namespace,
-  so a name that only appears inside a loop is reached through its loop, not directly.
-  `global_vars` publishes loop variables to the top level (and only there).
-- **Loop data is validated too.** With `die_on_bad_params` on, a key in a loop iteration
-  that the loop body never declares is an error, which is what catches typos in loop data.
-- **`query({ name })` is exact.** Pass the full path (`['loop', 'var']`); it does not
-  search nested loops for a bare name.
-- **`TMPL_COMMENT` / `TMPL_NOTE` are an extension.** Perl 2.98 rejects these tags; this
-  port strips the block instead, in the main template and in includes alike.
-
-## Migration from Perl
-
-This library is designed for drop-in compatibility:
-
-```perl
-# Perl
-use HTML::Template;
-my $template = HTML::Template->new(filename => 'template.tmpl');
-$template->param(name => 'World');
-print $template->output();
-```
+Pass the interface to `compile` and a typo in the data becomes a type error:
 
 ```typescript
-// TypeScript/JavaScript
-import { HTMLTemplate } from '@libraz/html-template';
-const template = new HTMLTemplate({ filename: 'template.tmpl' });
-template.param('name', 'World');
-console.log(template.output());
+const template = compile<PageData>(source);
 ```
 
-## Testing
+Add `--check` to a CI step to catch a generated file that has fallen behind.
 
-```bash
-yarn test             # Run all tests
-yarn test:watch       # Watch mode
-yarn test:coverage    # Generate coverage report
+## Streaming
+
+`renderTo(sink, data)` writes each piece as it is produced, and
+`renderChunks(data)` hands them back one at a time:
+
+```typescript
+template.renderTo(response, data);
+
+for (const chunk of template.renderChunks(data)) {
+  // ...
+}
 ```
 
-## Development
+## Documentation
 
-```bash
-yarn dev             # Watch mode for development
-yarn build           # Build for production
-yarn lint            # Run Biome lint
-yarn format          # Format with Biome
-yarn type-check      # TypeScript type checking
-```
+- [Getting started](docs/en/getting-started.md)
+- [Template syntax](docs/en/template-syntax.md)
+- [API reference](docs/en/api.md)
+- [Type generation](docs/en/type-generation.md)
+- [Coming from Perl HTML::Template](docs/en/from-perl.md)
 
 ## License
 
 MIT
-
-## Credits
-
-This is a complete TypeScript port of the Perl [HTML::Template](https://metacpan.org/pod/HTML::Template) module by Sam Tregar. All credit for the original design and API goes to the Perl community.
-
-## Links
-
-- [npm package](https://www.npmjs.com/package/@libraz/html-template)
-- [GitHub repository](https://github.com/libraz/node-perl-html-template)
-- [Original Perl HTML::Template](https://metacpan.org/pod/HTML::Template)

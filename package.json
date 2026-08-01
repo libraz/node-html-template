@@ -1,6 +1,6 @@
 {
   "name": "@libraz/html-template",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "publishConfig": {
     "access": "public"
   },
@@ -30,7 +30,7 @@
   "files": [
     "dist",
     "README.md",
-    "README.ja.md",
+    "README_ja.md",
     "LICENSE"
   ],
   "engines": {
