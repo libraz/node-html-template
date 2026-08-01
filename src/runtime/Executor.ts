@@ -118,11 +118,11 @@ export class Executor {
       return node.default ?? '';
     }
 
-    // An absent ESCAPE attribute leaves `escape` undefined, which is what lets
+    // An absent ESCAPE attribute leaves the field undefined, which is what lets
     // the default apply here without overriding an explicit ESCAPE=NONE.
-    const escape = node.escape ?? this.options.defaultEscape;
+    const escapeType = node.escape ?? this.options.defaultEscape;
 
-    return escape === 'none' ? value : escapeValue(value, escape);
+    return escapeType === 'none' ? value : escapeValue(value, escapeType);
   }
 
   /**
