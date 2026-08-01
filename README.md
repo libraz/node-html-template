@@ -118,7 +118,11 @@ tmpl.param({
 });
 ```
 
-`ESCAPE=1` is also supported as a Perl-compatible shorthand for `ESCAPE="HTML"`.
+Valid `ESCAPE` values are `HTML`, `URL`, `JS`, `NONE`, `1` (a shorthand for `HTML`)
+and `0` (a shorthand for `NONE`). Anything else is a parse error, as it is in Perl.
+
+A `DEFAULT` value is written out verbatim and is never escaped, because Perl's
+`HTML::Template::DEF` skips the escape step when it substitutes a default.
 
 ### Default Escaping
 
@@ -128,6 +132,9 @@ const tmpl = new HTMLTemplate({
   default_escape: 'html'  // All vars HTML-escaped by default
 });
 ```
+
+`default_escape` only applies to tags that carry no `ESCAPE` attribute. Writing
+`ESCAPE=NONE` (or `ESCAPE=0`) on a tag opts it out of the default.
 
 ### Template Comments
 
@@ -370,6 +377,23 @@ Sample results:
 
 - **Node.js**: >= 22.0.0
 - **Perl HTML::Template**: v2.98-compatible API, except Perl-specific features such as taint mode and IPC::SharedCache.
+
+Behaviour is pinned by a suite that replays a shared case set against output
+recorded from Perl HTML::Template 2.98. Re-record it with `yarn goldens:record`
+when you have a Perl install; the recording is committed so CI does not need one.
+
+Points worth knowing when porting templates:
+
+- **Parameter scopes.** Each `TMPL_LOOP` body is its own namespace. `die_on_bad_params`,
+  `param()` with no arguments and `query()` all work against the top-level namespace,
+  so a name that only appears inside a loop is reached through its loop, not directly.
+  `global_vars` publishes loop variables to the top level (and only there).
+- **Loop data is validated too.** With `die_on_bad_params` on, a key in a loop iteration
+  that the loop body never declares is an error, which is what catches typos in loop data.
+- **`query({ name })` is exact.** Pass the full path (`['loop', 'var']`); it does not
+  search nested loops for a bare name.
+- **`TMPL_COMMENT` / `TMPL_NOTE` are an extension.** Perl 2.98 rejects these tags; this
+  port strips the block instead, in the main template and in includes alike.
 
 ## Migration from Perl
 
