@@ -129,7 +129,7 @@ export class Template<T extends TemplateData = TemplateData> {
       caseSensitive: this.compiled.caseSensitive,
       globalVars: this.compiled.globalVars,
       loopContextVars: options.loopContextVars ?? false,
-      associates: resolve ? [{ param: (name?: string) => resolveOne(resolve, name) }] : []
+      resolve: resolve ? (name) => resolve(name) as ParamValue : undefined
     });
 
     const memoize = options.memoizeLazy ?? true;
@@ -183,17 +183,4 @@ export class Template<T extends TemplateData = TemplateData> {
       );
     }
   }
-}
-
-/**
- * Adapt a resolve hook to the lookup interface the context expects.
- *
- * @param resolve - Caller's fallback hook
- * @param name - Name being resolved, absent when the context is enumerating
- * @returns Value from the hook, or an empty list when enumerating
- */
-function resolveOne(resolve: (name: string) => unknown, name?: string): ParamValue | string[] {
-  if (name === undefined) return [];
-
-  return resolve(name) as ParamValue;
 }

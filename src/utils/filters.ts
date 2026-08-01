@@ -7,31 +7,24 @@
  * @module utils/filters
  */
 
-import type { Filter, HTMLTemplateOptions } from '../types.js';
-
-/** A filter as accepted by the `filter` option, before normalization */
-type FilterInput = Filter | Filter['sub'];
+import type { Filter } from '../types.js';
 
 /**
  * Apply the configured filters to template text.
  *
  * @param source - Template text
- * @param filter - `filter` option value, in any of its accepted shapes
+ * @param filters - Filters to apply, in order
  * @returns Filtered text
  */
-export function applyFilters(source: string, filter: HTMLTemplateOptions['filter']): string {
-  if (!filter) return source;
-
-  const filters: FilterInput[] = Array.isArray(filter) ? filter : [filter];
+export function applyFilters(source: string, filters: readonly Filter[]): string {
   if (filters.length === 0) return source;
 
   let content: string | string[] = source;
 
   for (const entry of filters) {
-    const sub = typeof entry === 'function' ? entry : entry.sub;
-    const format = typeof entry === 'function' ? 'scalar' : (entry.format ?? 'scalar');
+    const format = entry.format ?? 'scalar';
 
-    content = format === 'array' ? sub(toLines(content)) : sub(toText(content));
+    content = format === 'array' ? entry.sub(toLines(content)) : entry.sub(toText(content));
   }
 
   return toText(content);

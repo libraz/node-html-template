@@ -72,22 +72,6 @@ export function createError(message: string, filename?: string, line?: number): 
 }
 
 /**
- * Generate a fast hash code for a string
- * Simple DJB2 hash algorithm - fast and good enough for cache keys
- *
- * @param str - String to hash
- * @returns Hash code as 32-bit integer
- */
-export function hashCode(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) + hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return hash;
-}
-
-/**
  * Array join optimized for V8
  *
  * @param parts - Array of strings to join

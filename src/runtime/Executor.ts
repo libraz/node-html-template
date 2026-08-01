@@ -164,9 +164,8 @@ export class Executor {
   /**
    * Reject iteration keys the loop body never declares.
    *
-   * Perl passes each iteration hash to the loop's own sub-template, so
-   * `die_on_bad_params` catches typos in loop data exactly as it does for
-   * top-level parameters.
+   * A loop body is its own namespace, so a typo in a row is exactly as much a
+   * mistake as one at the top level and is reported the same way.
    *
    * @param iterationData - One iteration's parameters
    * @param loopScope - Parameter scope of the loop body
@@ -178,9 +177,7 @@ export class Executor {
       const name = this.normalize(key);
       if (loopScope.decls.has(name)) continue;
 
-      throw new Error(
-        `HTML::Template->output() : fatal error in loop output : HTML::Template : Attempt to set nonexistent parameter '${name}' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params => 1)`
-      );
+      throw new Error(`Attempt to set parameter '${name}', which the loop body does not declare (strictData is on)`);
     }
   }
 

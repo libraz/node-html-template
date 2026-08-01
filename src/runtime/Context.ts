@@ -4,15 +4,15 @@
  *
  * Features:
  * - Nested scope support for loops
- * - Global variables (when global_vars option enabled)
+ * - Global variables (when the globalVars option is enabled)
  * - Loop context variables (__first__, __last__, etc.)
  * - Case-sensitive/insensitive parameter lookup
- * - Associate object support (CGI.pm compatibility)
+ * - A fallback hook for names the caller never set
  *
  * @module runtime/Context
  */
 
-import type { AssociateObject, LoopDataItem, ParamValue } from '../types.js';
+import type { LoopDataItem, ParamValue } from '../types.js';
 import { isTruthy, normalizeParamName } from '../utils/helpers.js';
 import { getFinalLoopData, getFinalValue } from '../utils/LazyValue.js';
 
@@ -32,8 +32,13 @@ export interface ContextOptions {
   /** Whether loop iterations get __first__ and friends */
   loopContextVars: boolean;
 
-  /** Objects consulted for names the caller never set */
-  associates?: readonly AssociateObject[];
+  /**
+   * Consulted for a top-level name the caller never set.
+   *
+   * Never consulted inside a loop iteration: a name missing from a row is
+   * missing, not something to go looking for elsewhere.
+   */
+  resolve?: (name: string) => ParamValue;
 }
 
 /**
@@ -74,11 +79,6 @@ export class Context {
   private options: ContextOptions;
 
   /**
-   * Associate objects for parameter lookup
-   */
-  private associates: AssociateObject[];
-
-  /**
    * Create execution context
    *
    * @param options - Name resolution settings
@@ -87,7 +87,6 @@ export class Context {
     this.options = options;
     this.rootScope = { params: new Map() };
     this.currentScope = this.rootScope;
-    this.associates = [...(options.associates ?? [])];
   }
 
   /**
@@ -127,46 +126,8 @@ export class Context {
       }
     }
 
-    // Perl fills associated values into the top-level parameter map only, so
-    // they must not resolve names that are missing from a loop iteration.
     if (this.currentScope === this.rootScope) {
-      return this.lookupAssociate(name, normalizedName);
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Query associate objects for a parameter value.
-   * Objects are searched in reverse order, so the last one registered wins.
-   *
-   * @param name - Parameter name as written by the caller
-   * @param normalizedName - Name after case normalization
-   * @returns Value from an associate object, or undefined
-   */
-  private lookupAssociate(name: string, normalizedName: string): ParamValue | undefined {
-    for (let i = this.associates.length - 1; i >= 0; i -= 1) {
-      const associate = this.associates[i];
-      if (!associate) continue;
-
-      let associateName = name;
-      if (!this.options.caseSensitive) {
-        const associateParamNames = associate.param();
-        if (Array.isArray(associateParamNames)) {
-          const matchedName = associateParamNames.find(
-            (paramName): paramName is string =>
-              typeof paramName === 'string' && paramName.toLowerCase() === normalizedName
-          );
-          if (matchedName) {
-            associateName = matchedName;
-          }
-        }
-      }
-
-      const associateValue = associate.param(associateName);
-      if (associateValue !== undefined && !Array.isArray(associateValue)) {
-        return associateValue;
-      }
+      return this.options.resolve?.(name);
     }
 
     return undefined;
@@ -330,33 +291,5 @@ export class Context {
     setVar('__even__', odd ? '' : 1);
     setVar('__counter__', index + 1);
     setVar('__index__', index);
-  }
-
-  /**
-   * Get all parameters in root scope
-   * Used for query() method
-   *
-   * @returns Array of parameter names
-   */
-  getRootParams(): string[] {
-    return Array.from(this.rootScope.params.keys());
-  }
-
-  /**
-   * Add an associate object after construction.
-   *
-   * @param object - Object with a param() method
-   */
-  addAssociate(object: AssociateObject): void {
-    this.associates.push(object);
-  }
-
-  /**
-   * Clear all parameters
-   * Resets context to initial state
-   */
-  clear(): void {
-    this.rootScope.params.clear();
-    this.currentScope = this.rootScope;
   }
 }

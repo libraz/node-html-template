@@ -24,8 +24,6 @@ export type {
   TemplateData,
   TemplateShape
 } from './api/types.js';
-// Perl-compatible API
-export { HTMLTemplate } from './HTMLTemplate.js';
 export { TemplateNotFoundError } from './loader/errors.js';
 // Template sources
 export { memoryLoader } from './loader/memory.js';
@@ -35,18 +33,13 @@ export type { ParamUsage } from './parser/shape.js';
 
 // Export public types
 export type {
-  AssociateObject,
   EscapeType,
   Filter,
-  HTMLTemplateOptions,
   LazyLoopValue,
   LazyValue,
   LoopData,
   LoopDataItem,
-  OutputOptions,
   ParamValue,
-  QueryOptions,
-  QueryResult,
   SourceLoc
 } from './types.js';
 

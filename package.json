@@ -4,7 +4,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "TypeScript/ESM port of Perl's HTML::Template module core API and template syntax",
+  "description": "Perl HTML::Template's template syntax, with a TypeScript API",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
