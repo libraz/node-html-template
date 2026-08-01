@@ -1,0 +1,410 @@
+{
+  "associate-case-insensitive": {
+    "ok": 1,
+    "out": "[CGIVAL]"
+  },
+  "associate-fills-top-level": {
+    "ok": 1,
+    "out": "[FROM_CGI][SET]"
+  },
+  "associate-not-visible-in-loop": {
+    "ok": 1,
+    "out": "[][]"
+  },
+  "bare-name-only": {
+    "ok": 1,
+    "out": "Hello Fred friend"
+  },
+  "bare-name-plus-default": {
+    "ok": 1,
+    "out": "[D]"
+  },
+  "bare-name-plus-escape": {
+    "ok": 1,
+    "out": "[&lt;x&gt;&amp;&#39;&quot;]"
+  },
+  "case-insensitive-lookup": {
+    "ok": 1,
+    "out": "v"
+  },
+  "case-sensitive-lookup": {
+    "ok": 1,
+    "out": "[A][B]"
+  },
+  "clear-params-resets": {
+    "ok": 1,
+    "out": "[]"
+  },
+  "crossing-blocks-dies": {
+    "err": "HTML::Template->new() : found <//TMPL_IF> with no matching <TMPL_IF> at /fake/path/for/non/file/template : line 1.",
+    "ok": 0
+  },
+  "default-escape-applies": {
+    "ok": 1,
+    "out": "[&lt;x&gt;]"
+  },
+  "default-escape-overridden-by-url": {
+    "ok": 1,
+    "out": "[&lt;x&gt;][a%20b]"
+  },
+  "default-escape-suppressed-by-none": {
+    "ok": 1,
+    "out": "[&lt;x&gt;][<y>][<z>]"
+  },
+  "default-ignored-when-value-set": {
+    "ok": 1,
+    "out": "[&lt;x&gt;]"
+  },
+  "default-not-escaped-html": {
+    "ok": 1,
+    "out": "[a&b]"
+  },
+  "default-not-escaped-url": {
+    "ok": 1,
+    "out": "[a b]"
+  },
+  "default-not-used-for-empty-string": {
+    "ok": 1,
+    "out": "[]"
+  },
+  "default-on-loop-dies": {
+    "err": "HTML::Template->new() : DEFAULT option invalid in a TMPL_LOOP tag at /fake/path/for/non/file/template : line 1.",
+    "ok": 0
+  },
+  "default-with-single-quotes": {
+    "ok": 1,
+    "out": "[it's]"
+  },
+  "duplicate-escape-dies": {
+    "err": "HTML::Template->new() : Syntax error in <TMPL_*> tag at /fake/path/for/non/file/template : 1.",
+    "ok": 0
+  },
+  "empty-name-dies": {
+    "err": "HTML::Template->new() : No NAME given to a TMPL_VAR tag at /fake/path/for/non/file/template : line 1.",
+    "ok": 0
+  },
+  "escape-0-shorthand": {
+    "ok": 1,
+    "out": "[<x>]"
+  },
+  "escape-1-shorthand": {
+    "ok": 1,
+    "out": "[&lt;x&gt;]"
+  },
+  "escape-before-bare-name": {
+    "ok": 1,
+    "out": "[&lt;x&gt;]"
+  },
+  "escape-html-charset": {
+    "ok": 1,
+    "out": "&lt;a href=&quot;x&quot;&gt;&amp;&#39;&lt;/a&gt;"
+  },
+  "escape-js-charset": {
+    "ok": 1,
+    "out": "it\\'s \\\"x\\\"\\nline\\\\end"
+  },
+  "escape-on-if-dies": {
+    "err": "HTML::Template->new() : ESCAPE option invalid in a TMPL_IF tag at /fake/path/for/non/file/template : line 1.",
+    "ok": 0
+  },
+  "escape-quoted-value": {
+    "ok": 1,
+    "out": "[&lt;x&gt;]"
+  },
+  "escape-url-charset": {
+    "ok": 1,
+    "out": "a%7Eb%20c%2Fd%3Fe%3Df%26g"
+  },
+  "escape-url-reserved": {
+    "ok": 1,
+    "out": "a%20b%2Bc%25d-e_f.g"
+  },
+  "filter-rewrites-source": {
+    "ok": 1,
+    "out": "V"
+  },
+  "get-nonexistent-param-dies": {
+    "err": "HTML::Template : Attempt to get nonexistent parameter 'nope' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params set => 1)",
+    "ok": 0
+  },
+  "global-vars-allows-setting-loop-scoped-name": {
+    "ok": 1,
+    "out": "[TOP]"
+  },
+  "global-vars-hoists-to-top-only": {
+    "ok": 1,
+    "out": "T.MTM"
+  },
+  "global-vars-in-conditional": {
+    "ok": 1,
+    "out": "GG"
+  },
+  "global-vars-inner-shadows": {
+    "ok": 1,
+    "out": "[IN][OUT]"
+  },
+  "global-vars-outer-visible": {
+    "ok": 1,
+    "out": "[OUT][OUT]"
+  },
+  "global-vars-two-levels": {
+    "err": "HTML::Template->output() : fatal error in loop output : HTML::Template : Attempt to set nonexistent parameter 'mid' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params => 1)",
+    "ok": 0
+  },
+  "gt-inside-quoted-value-dies": {
+    "ok": 1,
+    "out": "[b\">]"
+  },
+  "html-comment-form": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "if-closed-by-unless-dies": {
+    "err": "HTML::Template->new() : found </TMPL_UNLESS> incorrectly terminating a <TMPL_IF> (use </TMPL_IF>) at /fake/path/for/non/file/template : line 1.",
+    "ok": 0
+  },
+  "if-numeric-zero": {
+    "ok": 1,
+    "out": "F"
+  },
+  "if-on-empty-loop": {
+    "err": "HTML::Template::param() : attempt to set parameter 'l' with an array ref - parameter is not a TMPL_LOOP!",
+    "ok": 0
+  },
+  "if-on-nonempty-loop": {
+    "ok": 1,
+    "out": "yesx"
+  },
+  "if-string-double-zero": {
+    "ok": 1,
+    "out": "T"
+  },
+  "if-string-space": {
+    "ok": 1,
+    "out": "T"
+  },
+  "if-string-zero": {
+    "ok": 1,
+    "out": "F"
+  },
+  "if-string-zero-point-zero": {
+    "ok": 1,
+    "out": "T"
+  },
+  "if-unset": {
+    "ok": 1,
+    "out": "F"
+  },
+  "include-bare-dotted-name": {
+    "ok": 1,
+    "out": "A[inc]B"
+  },
+  "include-missing-dies": {
+    "err": "HTML::Template->new() : Cannot open included file nope-does-not-exist.tmpl : file not found.",
+    "ok": 0
+  },
+  "include-missing-tolerated": {
+    "ok": 1,
+    "out": "AB"
+  },
+  "include-nested": {
+    "ok": 1,
+    "out": "A(deep)B"
+  },
+  "include-quoted-name": {
+    "ok": 1,
+    "out": "A[inc]B"
+  },
+  "include-recursive-dies": {
+    "err": "HTML::Template->new() : likely recursive includes - parsed 10 files deep and giving up (set max_includes higher to allow deeper recursion).",
+    "ok": 0
+  },
+  "include-same-file-twice": {
+    "ok": 1,
+    "out": "pp"
+  },
+  "include-with-var": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "loop-context-vars": {
+    "ok": 1,
+    "out": "[1/0/f=1/l=/i=0/o=1/od=1/ev=][2/1/f=0/l=0/i=1/o=0/od=/ev=1][3/2/f=0/l=1/i=0/o=1/od=1/ev=]"
+  },
+  "loop-context-vars-in-if": {
+    "ok": 1,
+    "out": "F.I.L."
+  },
+  "loop-context-vars-single": {
+    "ok": 1,
+    "out": "[f=1l=1i=0o=1]"
+  },
+  "loop-context-vars-two": {
+    "ok": 1,
+    "out": "[f=1l=i=0o=1][f=0l=1i=0o=1]"
+  },
+  "loop-data-declared-key-ok": {
+    "ok": 1,
+    "out": "[1][2]"
+  },
+  "loop-data-undeclared-key-dies": {
+    "err": "HTML::Template->output() : fatal error in loop output : HTML::Template : Attempt to set nonexistent parameter 'stray' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params => 1)",
+    "ok": 0
+  },
+  "loop-data-undeclared-key-tolerated": {
+    "ok": 1,
+    "out": "x"
+  },
+  "loop-empty": {
+    "ok": 1,
+    "out": "[]"
+  },
+  "loop-if-else-inside": {
+    "ok": 1,
+    "out": "YN"
+  },
+  "loop-nested": {
+    "ok": 1,
+    "out": "ab|c|"
+  },
+  "loop-repeated-name": {
+    "ok": 1,
+    "out": "aabb"
+  },
+  "loop-set-with-scalar-dies": {
+    "err": "HTML::Template::param() : attempt to set parameter 'l' with a scalar - parameter is not a TMPL_VAR!",
+    "ok": 0
+  },
+  "loop-undef-value-in-iteration": {
+    "ok": 1,
+    "out": "[x][]"
+  },
+  "mixed-tag-case": {
+    "ok": 1,
+    "out": "VV"
+  },
+  "multiline-tag": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "name-with-dot": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "name-with-slash": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "name-with-spaces-around-equals": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "nested-if-else": {
+    "ok": 1,
+    "out": "C"
+  },
+  "no-global-vars-outer-hidden": {
+    "ok": 1,
+    "out": "[IN][]"
+  },
+  "no-includes-dies": {
+    "err": "HTML::Template : Illegal attempt to use TMPL_INCLUDE in template file : (no_includes => 1)",
+    "ok": 0
+  },
+  "param-lists-top-level-names": {
+    "ok": 1,
+    "out": "c,inside_if,top"
+  },
+  "query-loop-names": {
+    "ok": 1,
+    "out": "a,m"
+  },
+  "query-loop-names-nested": {
+    "ok": 1,
+    "out": "b"
+  },
+  "query-name-loop-scoped-without-path": {
+    "ok": 1,
+    "out": "(undef)"
+  },
+  "query-name-path": {
+    "ok": 1,
+    "out": "VAR"
+  },
+  "query-top-level-names": {
+    "ok": 1,
+    "out": "c,inside_if,l,top"
+  },
+  "quoted-name-without-keyword": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "self-closing-tag": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "set-conditional-scoped-name-ok": {
+    "ok": 1,
+    "out": "[V]"
+  },
+  "set-loop-scoped-name-dies": {
+    "err": "HTML::Template : Attempt to set nonexistent parameter 'inner' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params => 1)",
+    "ok": 0
+  },
+  "stray-else-dies": {
+    "err": "HTML::Template->new() : found <TMPL_ELSE> with no matching <TMPL_IF> or <TMPL_UNLESS> at /fake/path/for/non/file/template : line 1.",
+    "ok": 0
+  },
+  "text-with-bare-lt": {
+    "ok": 1,
+    "out": "a < b V c"
+  },
+  "trailing-newline-preserved": {
+    "ok": 1,
+    "out": "line1\nV\nline3\n"
+  },
+  "unclosed-if-dies": {
+    "err": "HTML::Template->new() : At least one <TMPL_IF> or <TMPL_UNLESS> not terminated at end of file!",
+    "ok": 0
+  },
+  "unclosed-loop-dies": {
+    "err": "HTML::Template->new() : At least one <TMPL_LOOP> not terminated at end of file!",
+    "ok": 0
+  },
+  "unknown-escape-value-dies": {
+    "err": "HTML::Template->new() : Syntax error in <TMPL_*> tag at /fake/path/for/non/file/template : 1.",
+    "ok": 0
+  },
+  "unknown-tag-non-strict-is-text": {
+    "ok": 1,
+    "out": "A<TMPL_BOGUS NAME=\"x\">B"
+  },
+  "unknown-tag-strict-dies": {
+    "err": "HTML::Template->new() : Syntax error in <TMPL_*> tag at /fake/path/for/non/file/template : 1.",
+    "ok": 0
+  },
+  "unless-closed-by-if-dies": {
+    "err": "HTML::Template->new() : found </TMPL_IF> incorrectly terminating a <TMPL_UNLESS> (use </TMPL_UNLESS>) at /fake/path/for/non/file/template : line 1.",
+    "ok": 0
+  },
+  "unless-else": {
+    "ok": 1,
+    "out": "T"
+  },
+  "unterminated-quote-degrades-to-bare-value": {
+    "ok": 1,
+    "out": "[b\">]"
+  },
+  "utf8-passthrough": {
+    "ok": 1,
+    "out": "[日本語]"
+  },
+  "vanguard-plain": {
+    "ok": 1,
+    "out": "x A y"
+  },
+  "vanguard-punctuated-names": {
+    "ok": 1,
+    "out": "x A y B z C w"
+  }
+}

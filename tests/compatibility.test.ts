@@ -67,7 +67,7 @@ describe('Perl HTML::Template compatibility gaps', () => {
       scalarref: 'A<TMPL_BOGUS NAME="x">B',
       strict: false
     });
-    expect(tmpl.output()).toBe('AB');
+    expect(tmpl.output()).toBe('A<TMPL_BOGUS NAME="x">B');
   });
 
   it('applies filters to included templates and supports include shorthand', () => {

@@ -122,12 +122,13 @@ describe('ESCAPE Tests', () => {
       expect(tmpl.output()).toBe('var msg = "Say \\"Hello\\"";');
     });
 
-    it('should support ESCAPE="javascript" as alias', () => {
-      const tmpl = new HTMLTemplate({
-        scalarref: '<TMPL_VAR NAME="foo" ESCAPE="javascript">'
-      });
-      tmpl.param('foo', 'It\'s "test"');
-      expect(tmpl.output()).toBe('It\\\'s \\"test\\"');
+    it('should reject ESCAPE values Perl does not accept', () => {
+      expect(
+        () =>
+          new HTMLTemplate({
+            scalarref: '<TMPL_VAR NAME="foo" ESCAPE="javascript">'
+          })
+      ).toThrow(/invalid ESCAPE value/);
     });
   });
 

@@ -1,77 +1,66 @@
 /**
  * Include processor
- * Handles TMPL_INCLUDE tag expansion before parsing
  *
- * Features:
- * - Recursive include processing
- * - Circular include detection
- * - max_includes depth limiting
- * - die_on_missing_include support
+ * Expands TMPL_INCLUDE tags into the template text before tokenization, so
+ * the parser only ever sees a single flattened source.
  *
  * @module parser/IncludeProcessor
  */
 
-// processIncludesRecursive and loadIncludeFile are mutually recursive
-
-import { readFileSync } from 'node:fs';
+import { readTemplateFile } from '../loader/source.js';
 import type { HTMLTemplateOptions } from '../types.js';
-import { parseOpenMode, readFileWithEncoding } from '../utils/encoding.js';
 import { resolveFile } from '../utils/FileResolver.js';
+import { applyFilters } from '../utils/filters.js';
 import { createError } from '../utils/helpers.js';
+import { parseTagAttributes, TagSyntaxError } from './attributes.js';
+import { stripComments } from './comments.js';
 
 /**
- * Include tag regex pattern
- * Matches: <TMPL_INCLUDE NAME="filename">, <TMPL_INCLUDE filename>, or HTML comment form
- * Note: Not using /g flag - we create new regex instances for each call
+ * Matches a TMPL_INCLUDE tag, capturing its attribute text.
+ * Kept in step with the tokenizer's tag pattern.
  */
-const INCLUDE_PATTERN = /<\s*(?:!--\s*)?TMPL_INCLUDE\s+([^>]*?)\s*(?:--\s*)?>/i;
-const INCLUDE_NAME_ATTR = /NAME\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i;
+const INCLUDE_REGEX = /<\s*(?:!--\s*)?TMPL_INCLUDE\s*([^>]*?)\s*(?:--\s*)?\/?\s*>/gi;
 
 /**
- * Include processing context
+ * Result of expanding every include in a template.
+ */
+export interface IncludeResult {
+  /** Template text with all includes expanded */
+  source: string;
+
+  /** Modification time of each included file, for cache validation */
+  mtimes: Map<string, number>;
+}
+
+/**
+ * State threaded through recursive include expansion.
  */
 interface IncludeContext {
-  /**
-   * Current include depth
-   */
+  /** Current nesting depth */
   depth: number;
 
-  /**
-   * Set of files being processed (for circular detection)
-   */
+  /** Files on the current include chain, for cycle detection */
   processing: Set<string>;
 
-  /**
-   * Map of all included files and their mtimes
-   */
+  /** Modification times collected so far */
   mtimes: Map<string, number>;
 
-  /**
-   * Template options
-   */
+  /** Template options */
   options: HTMLTemplateOptions;
 
-  /**
-   * Current file being processed
-   */
+  /** File the current text came from, for relative resolution */
   currentFile?: string;
 }
 
 /**
- * Process TMPL_INCLUDE tags in template
- * Recursively expands includes before parsing
+ * Expand every TMPL_INCLUDE in a template.
  *
- * @param source - Template source with INCLUDE tags
+ * @param source - Template text
  * @param options - Template options
- * @param currentFile - Current file path (for relative includes)
- * @returns Processed template source and file mtimes
+ * @param currentFile - Path of the template, for relative include resolution
+ * @returns Expanded text and the modification times of included files
  */
-export function processIncludes(
-  source: string,
-  options: HTMLTemplateOptions,
-  currentFile?: string
-): { source: string; mtimes: Map<string, number> } {
-  // If includes disabled, return as-is
+export function processIncludes(source: string, options: HTMLTemplateOptions, currentFile?: string): IncludeResult {
   if (options.no_includes) {
     return { source, mtimes: new Map() };
   }
@@ -84,152 +73,104 @@ export function processIncludes(
     currentFile
   };
 
-  const processed = processIncludesRecursive(source, context);
-
-  return { source: processed, mtimes: context.mtimes };
+  return { source: expand(source, context), mtimes: context.mtimes };
 }
 
 /**
- * Recursively process includes in source
+ * Replace every include tag in one file's text.
  *
- * @param source - Template source
- * @param context - Include context
- * @returns Processed source
+ * @param source - Template text
+ * @param context - Include state
+ * @returns Text with this level's includes expanded
  */
-function processIncludesRecursive(source: string, context: IncludeContext): string {
-  // Check depth limit
+function expand(source: string, context: IncludeContext): string {
   const maxIncludes = context.options.max_includes ?? 10;
   if (maxIncludes > 0 && context.depth >= maxIncludes) {
-    throw createError(`TMPL_INCLUDE recursion depth exceeded (max: ${maxIncludes})`);
+    throw createError(
+      `HTML::Template->new() : likely recursive includes - parsed ${maxIncludes} files deep and giving up (set max_includes higher to allow deeper recursion).`
+    );
   }
 
-  // Use String.replace() to find and replace all includes
-  // This approach avoids issues with shared regex state during recursion
-  let result = source;
+  // A fresh regex per call keeps recursive expansion from sharing lastIndex.
+  const regex = new RegExp(INCLUDE_REGEX.source, INCLUDE_REGEX.flags);
 
-  // Keep processing until no more includes found
-  // Create new regex instance for each iteration to avoid state issues
-  const includeRegex = new RegExp(INCLUDE_PATTERN, 'g');
+  return source.replace(regex, (_match, attrString: string) => {
+    const filename = parseIncludeName(attrString);
 
-  result = result.replace(includeRegex, (_match, quoted1, quoted2, unquoted) => {
-    // Get filename from match (can be in quoted1, quoted2, or unquoted)
-    const filename = getIncludeFilename(quoted1 ?? quoted2 ?? unquoted ?? '');
-
-    if (!filename) {
-      throw createError('TMPL_INCLUDE requires NAME attribute');
-    }
-
-    // Process this include
     try {
-      const includedContent = loadIncludeFile(filename, context);
-      return includedContent;
+      return loadInclude(filename, context);
     } catch (error) {
       if (context.options.die_on_missing_include ?? true) {
         throw error;
       }
-      // If die_on_missing_include is false, skip the include silently
       return '';
     }
   });
-
-  return result;
-}
-
-function getIncludeFilename(attrString: string): string {
-  const match = attrString.match(INCLUDE_NAME_ATTR);
-  if (match) {
-    return match[1] ?? match[2] ?? match[3] ?? '';
-  }
-
-  const trimmed = attrString.trim();
-  return /^[^\s=]+$/.test(trimmed) ? trimmed : '';
 }
 
 /**
- * Load and process include file
+ * Extract the NAME of an include tag.
  *
- * @param filename - Include filename
- * @param context - Include context
- * @returns Processed include content
+ * @param attrString - Attribute text from the tag
+ * @returns Include filename
+ * @throws Error when the tag has no usable NAME
  */
-function loadIncludeFile(filename: string, context: IncludeContext): string {
-  // Resolve file path
-  const resolved = resolveFile(filename, {
+function parseIncludeName(attrString: string): string {
+  let name: string | undefined;
+
+  try {
+    name = parseTagAttributes(attrString).name;
+  } catch (error) {
+    if (error instanceof TagSyntaxError) {
+      throw createError(`Syntax error in <TMPL_INCLUDE> tag: ${error.message}`);
+    }
+    throw error;
+  }
+
+  if (!name) {
+    throw createError('HTML::Template->new() : No NAME given to a TMPL_INCLUDE tag');
+  }
+
+  return name;
+}
+
+/**
+ * Read one included file and expand its own includes.
+ *
+ * @param filename - Include filename as written in the template
+ * @param context - Include state
+ * @returns Fully expanded contents of the included file
+ * @throws Error when the file cannot be found or the chain is circular
+ */
+function loadInclude(filename: string, context: IncludeContext): string {
+  const { filepath, mtime } = resolveFile(filename, {
     path: context.options.path ?? [],
     searchPathOnInclude: context.options.search_path_on_include ?? false,
     currentFile: context.currentFile
   });
 
-  const { filepath, mtime } = resolved;
-
-  // Check for circular includes
   if (context.processing.has(filepath)) {
-    throw createError(`Circular TMPL_INCLUDE detected: ${filepath}`);
+    throw createError(
+      `HTML::Template->new() : likely recursive includes - ${filepath} includes itself directly or indirectly.`
+    );
   }
 
-  // Add to processing set
   context.processing.add(filepath);
-
-  // Add mtime to tracking
   context.mtimes.set(filepath, mtime);
 
-  // Read file
-  let content: string;
-  if (context.options.utf8) {
-    content = readFileWithEncoding(filepath, 'utf-8');
-  } else if (context.options.open_mode) {
-    content = readFileWithEncoding(filepath, parseOpenMode(context.options.open_mode));
-  } else {
-    content = readFileSync(filepath, 'utf-8');
-  }
+  // Included text goes through the same preprocessing as the main template.
+  let content = applyFilters(readTemplateFile(filepath, context.options), context.options.filter);
+  content = stripComments(content);
 
-  content = applyIncludeFilters(content, context.options);
-
-  // Process nested includes
-  const prevFile = context.currentFile;
+  const previousFile = context.currentFile;
   context.currentFile = filepath;
   context.depth += 1;
 
-  const processed = processIncludesRecursive(content, context);
+  const expanded = expand(content, context);
 
   context.depth -= 1;
-  context.currentFile = prevFile;
-
-  // Remove from processing set
+  context.currentFile = previousFile;
   context.processing.delete(filepath);
 
-  return processed;
-}
-
-function applyIncludeFilters(source: string, options: HTMLTemplateOptions): string {
-  if (!options.filter) {
-    return source;
-  }
-
-  const filters = Array.isArray(options.filter) ? options.filter : [options.filter];
-  let filtered: string | string[] = source;
-
-  for (const filter of filters) {
-    if (typeof filter === 'function') {
-      if (Array.isArray(filtered)) {
-        filtered = filtered.join('');
-      }
-      filtered = filter(filtered);
-      continue;
-    }
-
-    if (filter.format === 'array') {
-      if (typeof filtered === 'string') {
-        filtered = filtered.split(/(?<=\n)/);
-      }
-      filtered = filter.sub(filtered);
-    } else {
-      if (Array.isArray(filtered)) {
-        filtered = filtered.join('');
-      }
-      filtered = filter.sub(filtered);
-    }
-  }
-
-  return Array.isArray(filtered) ? filtered.join('') : filtered;
+  return expanded;
 }

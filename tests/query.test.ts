@@ -1,6 +1,11 @@
 /**
  * query() method tests
- * Tests for template structure querying
+ *
+ * Expected values in this file were taken from Perl HTML::Template 2.98.
+ * The governing rules are:
+ * - every TMPL_LOOP opens a namespace; conditionals do not
+ * - reported names are normalized for case unless case_sensitive is set
+ * - lookups are exact, so a path must name every enclosing loop
  */
 
 import { describe, expect, it } from 'vitest';
@@ -42,6 +47,14 @@ describe('query() method', () => {
 
       const result = tmpl.query();
       expect(result).toEqual(['hide', 'show']);
+    });
+
+    it('should include names used inside a conditional at the same level', () => {
+      const tmpl = new HTMLTemplate({
+        scalarref: '<TMPL_IF NAME="cond"><TMPL_VAR NAME="inside"></TMPL_IF><TMPL_VAR NAME="top">'
+      });
+
+      expect(tmpl.query()).toEqual(['cond', 'inside', 'top']);
     });
 
     it('should return only top-level parameters (Perl-compatible)', () => {
@@ -104,13 +117,13 @@ describe('query() method', () => {
       expect(tmpl.query({ name: 'bar' })).toBeUndefined();
     });
 
-    it('should handle nested parameters', () => {
+    it('should not find loop-scoped names without a path', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="name"></TMPL_LOOP>'
       });
 
       expect(tmpl.query({ name: 'items' })).toBe('LOOP');
-      expect(tmpl.query({ name: 'name' })).toBe('VAR');
+      expect(tmpl.query({ name: 'name' })).toBeUndefined();
     });
 
     it('should handle array path for nested query', () => {
@@ -136,7 +149,7 @@ describe('query() method', () => {
       expect(tmpl.query({ name: ['outer', 'inner', 'only_inner'] })).toBe('VAR');
       expect(tmpl.query({ name: ['outer', 'missing', 'only_inner'] })).toBeUndefined();
       expect(tmpl.query({ loop: ['outer', 'inner'] })).toEqual(['only_inner']);
-      expect(() => tmpl.query({ loop: ['outer', 'missing'] })).toThrow(/doesn't end in a TMPL_LOOP/);
+      expect(tmpl.query({ loop: ['outer', 'missing'] })).toBeUndefined();
     });
   });
 
@@ -150,15 +163,23 @@ describe('query() method', () => {
       expect(result).toEqual(['name', 'value']);
     });
 
-    it('should throw for nonexistent loop', () => {
+    it('should return undefined for a nonexistent loop', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="name"></TMPL_LOOP>'
       });
 
-      expect(() => tmpl.query({ loop: 'nonexistent' })).toThrow(/doesn't end in a TMPL_LOOP/);
+      expect(tmpl.query({ loop: 'nonexistent' })).toBeUndefined();
     });
 
-    it('should return parameters in nested loop', () => {
+    it('should throw when the path names a variable instead of a loop', () => {
+      const tmpl = new HTMLTemplate({
+        scalarref: '<TMPL_VAR NAME="plain">'
+      });
+
+      expect(() => tmpl.query({ loop: 'plain' })).toThrow(/doesn't end in a TMPL_LOOP/);
+    });
+
+    it('should require a path to reach a nested loop', () => {
       const tmpl = new HTMLTemplate({
         scalarref: `
           <TMPL_LOOP NAME="outer">
@@ -170,11 +191,9 @@ describe('query() method', () => {
         `
       });
 
-      const outerResult = tmpl.query({ loop: 'outer' });
-      expect(outerResult).toEqual(['inner', 'outer_var']);
-
-      const innerResult = tmpl.query({ loop: 'inner' });
-      expect(innerResult).toEqual(['inner_var']);
+      expect(tmpl.query({ loop: 'outer' })).toEqual(['inner', 'outer_var']);
+      expect(tmpl.query({ loop: 'inner' })).toBeUndefined();
+      expect(tmpl.query({ loop: ['outer', 'inner'] })).toEqual(['inner_var']);
     });
 
     it('should include conditionals in loop query', () => {
@@ -211,12 +230,12 @@ describe('query() method', () => {
   });
 
   describe('Case sensitivity', () => {
-    it('should be case-insensitive by default', () => {
+    it('should report normalized names by default', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_VAR NAME="FooBar">'
       });
 
-      expect(tmpl.query()).toEqual(['FooBar']);
+      expect(tmpl.query()).toEqual(['foobar']);
       expect(tmpl.query({ name: 'foobar' })).toBe('VAR');
       expect(tmpl.query({ name: 'FOOBAR' })).toBe('VAR');
       expect(tmpl.query({ name: 'FooBar' })).toBe('VAR');
@@ -239,9 +258,9 @@ describe('query() method', () => {
         scalarref: '<TMPL_LOOP NAME="Items"><TMPL_VAR NAME="Name"></TMPL_LOOP>'
       });
 
-      expect(tmpl.query({ loop: 'items' })).toEqual(['Name']);
-      expect(tmpl.query({ loop: 'ITEMS' })).toEqual(['Name']);
-      expect(tmpl.query({ loop: 'Items' })).toEqual(['Name']);
+      expect(tmpl.query({ loop: 'items' })).toEqual(['name']);
+      expect(tmpl.query({ loop: 'ITEMS' })).toEqual(['name']);
+      expect(tmpl.query({ loop: 'Items' })).toEqual(['name']);
     });
   });
 
@@ -262,8 +281,10 @@ describe('query() method', () => {
         `
       });
 
+      // The loop and the names inside both conditionals all live at the top
+      // level, because only TMPL_LOOP opens a namespace.
       const allParams = tmpl.query();
-      expect(allParams).toEqual(['hide_footer', 'show_list', 'title']);
+      expect(allParams).toEqual(['footer', 'hide_footer', 'items', 'show_list', 'title']);
 
       expect(tmpl.query({ name: 'title' })).toBe('VAR');
       expect(tmpl.query({ name: 'show_list' })).toBe('VAR');
@@ -290,12 +311,13 @@ describe('query() method', () => {
       });
 
       expect(tmpl.query({ name: 'level1' })).toBe('LOOP');
-      expect(tmpl.query({ name: 'level2' })).toBe('LOOP');
-      expect(tmpl.query({ name: 'level3' })).toBe('LOOP');
+      expect(tmpl.query({ name: 'level2' })).toBeUndefined();
+      expect(tmpl.query({ name: ['level1', 'level2'] })).toBe('LOOP');
+      expect(tmpl.query({ name: ['level1', 'level2', 'level3'] })).toBe('LOOP');
 
       expect(tmpl.query({ loop: 'level1' })).toEqual(['level2', 'var1']);
-      expect(tmpl.query({ loop: 'level2' })).toEqual(['level3', 'var2']);
-      expect(tmpl.query({ loop: 'level3' })).toEqual(['var3']);
+      expect(tmpl.query({ loop: ['level1', 'level2'] })).toEqual(['level3', 'var2']);
+      expect(tmpl.query({ loop: ['level1', 'level2', 'level3'] })).toEqual(['var3']);
     });
 
     it('should handle conditionals with else branches', () => {
@@ -310,7 +332,7 @@ describe('query() method', () => {
       });
 
       const allParams = tmpl.query();
-      expect(allParams).toEqual(['condition']);
+      expect(allParams).toEqual(['condition', 'false_var', 'true_var']);
 
       expect(tmpl.query({ name: 'condition' })).toBe('VAR');
       expect(tmpl.query({ name: 'true_var' })).toBe('VAR');

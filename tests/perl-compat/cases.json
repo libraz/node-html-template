@@ -1,0 +1,884 @@
+[
+  {
+    "id": "bare-name-only",
+    "note": "A lone word is the NAME, so <tmpl_var name> declares a variable called 'name'",
+    "tmpl": "Hello <tmpl_var name> friend",
+    "params": {
+      "name": "Fred"
+    }
+  },
+  {
+    "id": "bare-name-plus-escape",
+    "note": "The most common real-world spelling: bare NAME followed by ESCAPE",
+    "tmpl": "[<TMPL_VAR foo ESCAPE=HTML>]",
+    "params": {
+      "foo": "<x>&'\""
+    }
+  },
+  {
+    "id": "bare-name-plus-default",
+    "tmpl": "[<TMPL_VAR foo DEFAULT=D>]",
+    "params": {}
+  },
+  {
+    "id": "escape-before-bare-name",
+    "tmpl": "[<TMPL_VAR ESCAPE=HTML foo>]",
+    "params": {
+      "foo": "<x>"
+    }
+  },
+  {
+    "id": "quoted-name-without-keyword",
+    "tmpl": "[<TMPL_VAR \"foo\">]",
+    "params": {
+      "foo": "V"
+    }
+  },
+  {
+    "id": "escape-1-shorthand",
+    "tmpl": "[<TMPL_VAR v ESCAPE=1>]",
+    "params": {
+      "v": "<x>"
+    }
+  },
+  {
+    "id": "escape-0-shorthand",
+    "tmpl": "[<TMPL_VAR v ESCAPE=0>]",
+    "params": {
+      "v": "<x>"
+    }
+  },
+  {
+    "id": "escape-quoted-value",
+    "tmpl": "[<TMPL_VAR NAME=\"v\" ESCAPE=\"html\">]",
+    "params": {
+      "v": "<x>"
+    }
+  },
+  {
+    "id": "name-with-spaces-around-equals",
+    "tmpl": "[<TMPL_VAR NAME = v >]",
+    "params": {
+      "v": "V"
+    }
+  },
+  {
+    "id": "self-closing-tag",
+    "tmpl": "[<TMPL_VAR NAME=foo />]",
+    "params": {
+      "foo": "V"
+    }
+  },
+  {
+    "id": "multiline-tag",
+    "tmpl": "[<TMPL_VAR\n  NAME=\"foo\"\n>]",
+    "params": {
+      "foo": "V"
+    }
+  },
+  {
+    "id": "html-comment-form",
+    "tmpl": "[<!-- TMPL_VAR NAME=\"foo\" -->]",
+    "params": {
+      "foo": "V"
+    }
+  },
+  {
+    "id": "mixed-tag-case",
+    "tmpl": "<tmpl_var NAME=v><TMPL_VAR name=v>",
+    "params": {
+      "v": "V"
+    }
+  },
+  {
+    "id": "name-with-dot",
+    "tmpl": "[<TMPL_VAR NAME=\"a.b\">]",
+    "params": {
+      "a.b": "V"
+    }
+  },
+  {
+    "id": "name-with-slash",
+    "tmpl": "[<TMPL_VAR NAME=\"a/b\">]",
+    "params": {
+      "a/b": "V"
+    }
+  },
+  {
+    "id": "text-with-bare-lt",
+    "tmpl": "a < b <TMPL_VAR v> c",
+    "params": {
+      "v": "V"
+    }
+  },
+  {
+    "id": "default-not-escaped-html",
+    "note": "HTML::Template::DEF writes the default straight out, skipping the escape op",
+    "tmpl": "[<TMPL_VAR NAME=foo DEFAULT='a&b' ESCAPE=HTML>]",
+    "params": {}
+  },
+  {
+    "id": "default-not-escaped-url",
+    "tmpl": "[<TMPL_VAR NAME=foo DEFAULT='a b' ESCAPE=URL>]",
+    "params": {}
+  },
+  {
+    "id": "default-not-used-for-empty-string",
+    "tmpl": "[<TMPL_VAR NAME=foo DEFAULT='D'>]",
+    "params": {
+      "foo": ""
+    }
+  },
+  {
+    "id": "default-ignored-when-value-set",
+    "tmpl": "[<TMPL_VAR NAME=foo DEFAULT=\"zzz\" ESCAPE=HTML>]",
+    "params": {
+      "foo": "<x>"
+    }
+  },
+  {
+    "id": "default-with-single-quotes",
+    "tmpl": "[<TMPL_VAR NAME=v DEFAULT=\"it's\">]",
+    "params": {}
+  },
+  {
+    "id": "default-escape-applies",
+    "tmpl": "[<TMPL_VAR NAME=foo>]",
+    "params": {
+      "foo": "<x>"
+    },
+    "opts": {
+      "default_escape": "HTML"
+    }
+  },
+  {
+    "id": "default-escape-suppressed-by-none",
+    "note": "An explicit ESCAPE wins over default_escape, including ESCAPE=NONE and ESCAPE=0",
+    "tmpl": "[<TMPL_VAR NAME=a>][<TMPL_VAR NAME=b ESCAPE=NONE>][<TMPL_VAR NAME=c ESCAPE=0>]",
+    "params": {
+      "a": "<x>",
+      "b": "<y>",
+      "c": "<z>"
+    },
+    "opts": {
+      "default_escape": "HTML"
+    }
+  },
+  {
+    "id": "default-escape-overridden-by-url",
+    "tmpl": "[<TMPL_VAR NAME=a>][<TMPL_VAR NAME=b ESCAPE=URL>]",
+    "params": {
+      "a": "<x>",
+      "b": "a b"
+    },
+    "opts": {
+      "default_escape": "HTML"
+    }
+  },
+  {
+    "id": "escape-html-charset",
+    "tmpl": "<TMPL_VAR NAME=u ESCAPE=HTML>",
+    "params": {
+      "u": "<a href=\"x\">&'</a>"
+    }
+  },
+  {
+    "id": "escape-js-charset",
+    "tmpl": "<TMPL_VAR NAME=u ESCAPE=JS>",
+    "params": {
+      "u": "it's \"x\"\nline\\end"
+    }
+  },
+  {
+    "id": "escape-url-charset",
+    "tmpl": "<TMPL_VAR NAME=u ESCAPE=URL>",
+    "params": {
+      "u": "a~b c/d?e=f&g"
+    }
+  },
+  {
+    "id": "escape-url-reserved",
+    "tmpl": "<TMPL_VAR NAME=u ESCAPE=URL>",
+    "params": {
+      "u": "a b+c%d-e_f.g"
+    }
+  },
+  {
+    "id": "loop-context-vars",
+    "note": "Truth values differ per branch in HTML::Template::LOOP::output",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR __counter__>/<TMPL_VAR __index__>/f=<TMPL_VAR __first__>/l=<TMPL_VAR __last__>/i=<TMPL_VAR __inner__>/o=<TMPL_VAR __outer__>/od=<TMPL_VAR __odd__>/ev=<TMPL_VAR __even__>]</TMPL_LOOP>",
+    "params": {
+      "L": [{}, {}, {}]
+    },
+    "opts": {
+      "loop_context_vars": 1
+    }
+  },
+  {
+    "id": "loop-context-vars-single",
+    "tmpl": "<TMPL_LOOP L>[f=<TMPL_VAR __first__>l=<TMPL_VAR __last__>i=<TMPL_VAR __inner__>o=<TMPL_VAR __outer__>]</TMPL_LOOP>",
+    "params": {
+      "L": [{}]
+    },
+    "opts": {
+      "loop_context_vars": 1
+    }
+  },
+  {
+    "id": "loop-context-vars-two",
+    "tmpl": "<TMPL_LOOP L>[f=<TMPL_VAR __first__>l=<TMPL_VAR __last__>i=<TMPL_VAR __inner__>o=<TMPL_VAR __outer__>]</TMPL_LOOP>",
+    "params": {
+      "L": [{}, {}]
+    },
+    "opts": {
+      "loop_context_vars": 1
+    }
+  },
+  {
+    "id": "loop-context-vars-in-if",
+    "tmpl": "<TMPL_LOOP L><TMPL_IF __first__>F</TMPL_IF><TMPL_IF __inner__>I</TMPL_IF><TMPL_IF __last__>L</TMPL_IF>.</TMPL_LOOP>",
+    "params": {
+      "L": [{}, {}, {}]
+    },
+    "opts": {
+      "loop_context_vars": 1
+    }
+  },
+  {
+    "id": "loop-nested",
+    "tmpl": "<TMPL_LOOP outer><TMPL_LOOP inner><TMPL_VAR v></TMPL_LOOP>|</TMPL_LOOP>",
+    "params": {
+      "outer": [
+        {
+          "inner": [
+            {
+              "v": "a"
+            },
+            {
+              "v": "b"
+            }
+          ]
+        },
+        {
+          "inner": [
+            {
+              "v": "c"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "loop-repeated-name",
+    "tmpl": "<TMPL_LOOP L>a</TMPL_LOOP><TMPL_LOOP L>b</TMPL_LOOP>",
+    "params": {
+      "L": [{}, {}]
+    }
+  },
+  {
+    "id": "loop-empty",
+    "tmpl": "[<TMPL_LOOP L>x</TMPL_LOOP>]",
+    "params": {
+      "L": []
+    }
+  },
+  {
+    "id": "loop-undef-value-in-iteration",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR a>]</TMPL_LOOP>",
+    "params": {
+      "L": [
+        {
+          "a": "x"
+        },
+        {
+          "a": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "loop-if-else-inside",
+    "tmpl": "<TMPL_LOOP L><TMPL_IF a>Y<TMPL_ELSE>N</TMPL_IF></TMPL_LOOP>",
+    "params": {
+      "L": [
+        {
+          "a": 1
+        },
+        {
+          "a": 0
+        }
+      ]
+    }
+  },
+  {
+    "id": "if-on-empty-loop",
+    "tmpl": "<TMPL_IF L>yes<TMPL_ELSE>no</TMPL_IF>",
+    "params": {
+      "L": []
+    }
+  },
+  {
+    "id": "if-on-nonempty-loop",
+    "tmpl": "<TMPL_IF L>yes<TMPL_ELSE>no</TMPL_IF><TMPL_LOOP L>x</TMPL_LOOP>",
+    "params": {
+      "L": [{}]
+    }
+  },
+  {
+    "id": "if-string-zero",
+    "tmpl": "<TMPL_IF v>T<TMPL_ELSE>F</TMPL_IF>",
+    "params": {
+      "v": "0"
+    }
+  },
+  {
+    "id": "if-string-zero-point-zero",
+    "tmpl": "<TMPL_IF v>T<TMPL_ELSE>F</TMPL_IF>",
+    "params": {
+      "v": "0.0"
+    }
+  },
+  {
+    "id": "if-string-double-zero",
+    "tmpl": "<TMPL_IF v>T<TMPL_ELSE>F</TMPL_IF>",
+    "params": {
+      "v": "00"
+    }
+  },
+  {
+    "id": "if-string-space",
+    "tmpl": "<TMPL_IF v>T<TMPL_ELSE>F</TMPL_IF>",
+    "params": {
+      "v": " "
+    }
+  },
+  {
+    "id": "if-numeric-zero",
+    "tmpl": "<TMPL_IF v>T<TMPL_ELSE>F</TMPL_IF>",
+    "params": {
+      "v": 0
+    }
+  },
+  {
+    "id": "if-unset",
+    "tmpl": "<TMPL_IF v>T<TMPL_ELSE>F</TMPL_IF>",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    }
+  },
+  {
+    "id": "unless-else",
+    "tmpl": "<TMPL_UNLESS v>T<TMPL_ELSE>F</TMPL_UNLESS>",
+    "params": {
+      "v": ""
+    }
+  },
+  {
+    "id": "nested-if-else",
+    "tmpl": "<TMPL_IF a>A<TMPL_ELSE><TMPL_IF b>B<TMPL_ELSE>C</TMPL_IF></TMPL_IF>",
+    "params": {
+      "a": 0,
+      "b": 0
+    }
+  },
+  {
+    "id": "global-vars-outer-visible",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR outer>]</TMPL_LOOP>",
+    "params": {
+      "L": [{}, {}],
+      "outer": "OUT"
+    },
+    "opts": {
+      "global_vars": 1
+    }
+  },
+  {
+    "id": "global-vars-inner-shadows",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR v>]</TMPL_LOOP>",
+    "params": {
+      "L": [
+        {
+          "v": "IN"
+        },
+        {}
+      ],
+      "v": "OUT"
+    },
+    "opts": {
+      "global_vars": 1
+    }
+  },
+  {
+    "id": "global-vars-in-conditional",
+    "tmpl": "<TMPL_LOOP L><TMPL_IF g>G<TMPL_ELSE>-</TMPL_IF></TMPL_LOOP>",
+    "params": {
+      "L": [{}, {}],
+      "g": 1
+    },
+    "opts": {
+      "global_vars": 1
+    }
+  },
+  {
+    "id": "global-vars-two-levels",
+    "tmpl": "<TMPL_LOOP A><TMPL_LOOP B>[<TMPL_VAR top>|<TMPL_VAR mid>]</TMPL_LOOP></TMPL_LOOP>",
+    "params": {
+      "top": "T",
+      "A": [
+        {
+          "mid": "M",
+          "B": [{}, {}]
+        }
+      ]
+    },
+    "opts": {
+      "global_vars": 1
+    }
+  },
+  {
+    "id": "no-global-vars-outer-hidden",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR v>]</TMPL_LOOP>",
+    "params": {
+      "L": [
+        {
+          "v": "IN"
+        },
+        {
+          "v": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-insensitive-lookup",
+    "tmpl": "<TMPL_VAR NAME=FooBar>",
+    "params": {
+      "foobar": "v"
+    }
+  },
+  {
+    "id": "case-sensitive-lookup",
+    "tmpl": "[<TMPL_VAR NAME=FooBar>][<TMPL_VAR NAME=foobar>]",
+    "params": {
+      "FooBar": "A",
+      "foobar": "B"
+    },
+    "opts": {
+      "case_sensitive": 1
+    }
+  },
+  {
+    "id": "vanguard-plain",
+    "tmpl": "x %foo% y",
+    "params": {
+      "foo": "A"
+    },
+    "opts": {
+      "vanguard_compatibility_mode": 1
+    }
+  },
+  {
+    "id": "vanguard-punctuated-names",
+    "note": "Perl's vanguard pattern is %([-\\w/.+]+)%, not %(\\w+)%",
+    "tmpl": "x %foo.bar% y %baz-qux% z %a/b% w",
+    "params": {
+      "foo.bar": "A",
+      "baz-qux": "B",
+      "a/b": "C"
+    },
+    "opts": {
+      "vanguard_compatibility_mode": 1
+    }
+  },
+  {
+    "id": "associate-fills-top-level",
+    "tmpl": "[<TMPL_VAR a>][<TMPL_VAR b>]",
+    "params": {
+      "b": "SET"
+    },
+    "associate": {
+      "a": "FROM_CGI",
+      "b": "CGI_B"
+    }
+  },
+  {
+    "id": "associate-case-insensitive",
+    "tmpl": "[<TMPL_VAR foo>]",
+    "params": {},
+    "associate": {
+      "FOO": "CGIVAL"
+    }
+  },
+  {
+    "id": "associate-not-visible-in-loop",
+    "note": "Perl fills the top-level param map only, so loops never see associates",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR fromcgi>]</TMPL_LOOP>",
+    "params": {
+      "L": [{}, {}]
+    },
+    "opts": {
+      "die_on_bad_params": 0
+    },
+    "associate": {
+      "fromcgi": "CGI"
+    }
+  },
+  {
+    "id": "filter-rewrites-source",
+    "tmpl": "XXvXX",
+    "params": {
+      "v": "V"
+    },
+    "filter": "xx-to-tag"
+  },
+  {
+    "id": "query-top-level-names",
+    "tmpl": "<TMPL_IF c><TMPL_VAR inside_if></TMPL_IF><TMPL_VAR top><TMPL_LOOP L><TMPL_VAR inner></TMPL_LOOP>",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    },
+    "query": true
+  },
+  {
+    "id": "param-lists-top-level-names",
+    "tmpl": "<TMPL_IF c><TMPL_VAR inside_if></TMPL_IF><TMPL_VAR top>",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    },
+    "paramlist": true
+  },
+  {
+    "id": "query-loop-names",
+    "tmpl": "<TMPL_LOOP L><TMPL_VAR a><TMPL_LOOP M><TMPL_VAR b></TMPL_LOOP></TMPL_LOOP>",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    },
+    "queryloop": ["L"]
+  },
+  {
+    "id": "query-loop-names-nested",
+    "tmpl": "<TMPL_LOOP L><TMPL_VAR a><TMPL_LOOP M><TMPL_VAR b></TMPL_LOOP></TMPL_LOOP>",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    },
+    "queryloop": ["L", "M"]
+  },
+  {
+    "id": "query-name-path",
+    "tmpl": "<TMPL_LOOP L><TMPL_VAR a></TMPL_LOOP>",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    },
+    "queryname": ["L", "a"]
+  },
+  {
+    "id": "query-name-loop-scoped-without-path",
+    "tmpl": "<TMPL_LOOP L><TMPL_VAR a></TMPL_LOOP>",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    },
+    "queryname": ["a"]
+  },
+  {
+    "id": "set-loop-scoped-name-dies",
+    "note": "Each loop body is its own namespace, so this is a bad param at the top level",
+    "tmpl": "<TMPL_LOOP L><TMPL_VAR inner></TMPL_LOOP>",
+    "params": {
+      "inner": "TOP"
+    }
+  },
+  {
+    "id": "set-conditional-scoped-name-ok",
+    "tmpl": "<TMPL_IF c>[<TMPL_VAR inside_if>]</TMPL_IF>",
+    "params": {
+      "c": 1,
+      "inside_if": "V"
+    }
+  },
+  {
+    "id": "get-nonexistent-param-dies",
+    "tmpl": "<TMPL_VAR a>",
+    "params": {},
+    "get": "nope"
+  },
+  {
+    "id": "clear-params-resets",
+    "tmpl": "[<TMPL_VAR v>]",
+    "params": {
+      "v": "X"
+    },
+    "clear": true
+  },
+  {
+    "id": "escape-on-if-dies",
+    "tmpl": "<TMPL_IF NAME=v ESCAPE=HTML>x</TMPL_IF>",
+    "params": {
+      "v": 1
+    }
+  },
+  {
+    "id": "default-on-loop-dies",
+    "tmpl": "<TMPL_LOOP NAME=L DEFAULT=x>y</TMPL_LOOP>",
+    "params": {}
+  },
+  {
+    "id": "empty-name-dies",
+    "tmpl": "[<TMPL_VAR NAME=\"\">]",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    }
+  },
+  {
+    "id": "unknown-escape-value-dies",
+    "tmpl": "[<TMPL_VAR NAME=foo ESCAPE=BOGUS>]",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    }
+  },
+  {
+    "id": "duplicate-escape-dies",
+    "tmpl": "[<TMPL_VAR v ESCAPE=HTML ESCAPE=NONE>]",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    }
+  },
+  {
+    "id": "unless-closed-by-if-dies",
+    "tmpl": "<TMPL_UNLESS v>T</TMPL_IF>",
+    "params": {}
+  },
+  {
+    "id": "if-closed-by-unless-dies",
+    "tmpl": "<TMPL_IF v>T</TMPL_UNLESS>",
+    "params": {}
+  },
+  {
+    "id": "unclosed-if-dies",
+    "tmpl": "<TMPL_IF v>x",
+    "params": {}
+  },
+  {
+    "id": "unclosed-loop-dies",
+    "tmpl": "<TMPL_LOOP L>x",
+    "params": {}
+  },
+  {
+    "id": "stray-else-dies",
+    "tmpl": "x<TMPL_ELSE>y",
+    "params": {}
+  },
+  {
+    "id": "crossing-blocks-dies",
+    "tmpl": "<TMPL_IF c><TMPL_LOOP L>x</TMPL_IF></TMPL_LOOP>",
+    "params": {}
+  },
+  {
+    "id": "unknown-tag-strict-dies",
+    "tmpl": "x<TMPL_BOGUS>y",
+    "params": {}
+  },
+  {
+    "id": "unknown-tag-non-strict-is-text",
+    "tmpl": "A<TMPL_BOGUS NAME=\"x\">B",
+    "params": {},
+    "opts": {
+      "strict": 0
+    }
+  },
+  {
+    "id": "gt-inside-quoted-value-dies",
+    "tmpl": "[<TMPL_VAR NAME=\"a>b\">]",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    }
+  },
+  {
+    "id": "loop-set-with-scalar-dies",
+    "tmpl": "<TMPL_LOOP L>x</TMPL_LOOP>",
+    "params": {
+      "L": "scalar"
+    }
+  },
+  {
+    "id": "include-quoted-name",
+    "tmpl": "A<TMPL_INCLUDE NAME=\"included.tmpl\">B",
+    "params": {},
+    "includes": {
+      "included.tmpl": "[inc]"
+    }
+  },
+  {
+    "id": "include-bare-dotted-name",
+    "note": "A bare include filename is not a \\w+ token, so it needs the general scanner",
+    "tmpl": "A<TMPL_INCLUDE included.tmpl>B",
+    "params": {},
+    "includes": {
+      "included.tmpl": "[inc]"
+    }
+  },
+  {
+    "id": "include-nested",
+    "tmpl": "A<TMPL_INCLUDE outer.tmpl>B",
+    "params": {},
+    "includes": {
+      "outer.tmpl": "(<TMPL_INCLUDE inner.tmpl>)",
+      "inner.tmpl": "deep"
+    }
+  },
+  {
+    "id": "include-same-file-twice",
+    "tmpl": "<TMPL_INCLUDE part.tmpl><TMPL_INCLUDE part.tmpl>",
+    "params": {},
+    "includes": {
+      "part.tmpl": "p"
+    }
+  },
+  {
+    "id": "include-with-var",
+    "tmpl": "<TMPL_INCLUDE part.tmpl>",
+    "params": {
+      "v": "V"
+    },
+    "includes": {
+      "part.tmpl": "[<TMPL_VAR v>]"
+    }
+  },
+  {
+    "id": "include-missing-dies",
+    "tmpl": "A<TMPL_INCLUDE NAME=\"nope-does-not-exist.tmpl\">B",
+    "params": {}
+  },
+  {
+    "id": "include-missing-tolerated",
+    "tmpl": "A<TMPL_INCLUDE NAME=\"nope-does-not-exist.tmpl\">B",
+    "params": {},
+    "opts": {
+      "die_on_missing_include": 0
+    }
+  },
+  {
+    "id": "include-recursive-dies",
+    "tmpl": "<TMPL_INCLUDE self.tmpl>",
+    "params": {},
+    "includes": {
+      "self.tmpl": "x<TMPL_INCLUDE self.tmpl>"
+    }
+  },
+  {
+    "id": "no-includes-dies",
+    "tmpl": "A<TMPL_INCLUDE NAME=\"included.tmpl\">B",
+    "params": {},
+    "opts": {
+      "no_includes": 1
+    },
+    "includes": {
+      "included.tmpl": "[inc]"
+    }
+  },
+  {
+    "id": "utf8-passthrough",
+    "tmpl": "[<TMPL_VAR v>]",
+    "params": {
+      "v": "日本語"
+    }
+  },
+  {
+    "id": "trailing-newline-preserved",
+    "tmpl": "line1\n<TMPL_VAR v>\nline3\n",
+    "params": {
+      "v": "V"
+    }
+  },
+  {
+    "id": "loop-data-undeclared-key-dies",
+    "note": "Perl applies die_on_bad_params to each loop iteration hash",
+    "tmpl": "<TMPL_LOOP L><TMPL_IF __first__>F</TMPL_IF></TMPL_LOOP>",
+    "params": {
+      "L": [
+        {
+          "stray": 1
+        }
+      ]
+    },
+    "opts": {
+      "loop_context_vars": 1
+    }
+  },
+  {
+    "id": "loop-data-undeclared-key-tolerated",
+    "tmpl": "<TMPL_LOOP L>x</TMPL_LOOP>",
+    "params": {
+      "L": [
+        {
+          "stray": 1
+        }
+      ]
+    },
+    "opts": {
+      "die_on_bad_params": 0
+    }
+  },
+  {
+    "id": "loop-data-declared-key-ok",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR a>]</TMPL_LOOP>",
+    "params": {
+      "L": [
+        {
+          "a": 1
+        },
+        {
+          "a": 2
+        }
+      ]
+    }
+  },
+  {
+    "id": "global-vars-hoists-to-top-only",
+    "note": "global_vars publishes names to the top level, not to intermediate loops",
+    "tmpl": "<TMPL_LOOP outer><TMPL_VAR top>.<TMPL_VAR mid><TMPL_LOOP inner><TMPL_VAR top><TMPL_VAR mid></TMPL_LOOP></TMPL_LOOP>",
+    "params": {
+      "top": "T",
+      "outer": [
+        {
+          "mid": "M",
+          "inner": [{}]
+        }
+      ]
+    },
+    "opts": {
+      "global_vars": 1
+    }
+  },
+  {
+    "id": "global-vars-allows-setting-loop-scoped-name",
+    "tmpl": "<TMPL_LOOP L>[<TMPL_VAR inner>]</TMPL_LOOP>",
+    "params": {
+      "inner": "TOP",
+      "L": [{}]
+    },
+    "opts": {
+      "global_vars": 1
+    }
+  },
+  {
+    "id": "unterminated-quote-degrades-to-bare-value",
+    "note": "Perl's unquoted alternative accepts quote characters, so this parses instead of failing",
+    "tmpl": "[<TMPL_VAR NAME=\"a>b\">]",
+    "params": {},
+    "opts": {
+      "die_on_bad_params": 0
+    }
+  }
+]

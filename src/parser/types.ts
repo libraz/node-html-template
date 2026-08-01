@@ -6,46 +6,12 @@
  */
 
 /**
- * Attribute map parsed from TMPL tags
- * Maps attribute name (lowercase) to value
- */
-export type AttributeMap = Map<string, string>;
-
-/**
- * Parse context for tracking position in template
+ * The text a tokenizer is working through, plus where it came from.
  */
 export interface ParseContext {
-  /**
-   * Current line number (1-indexed)
-   */
-  line: number;
-
-  /**
-   * Current column number (1-indexed)
-   */
-  col: number;
-
-  /**
-   * Current position in source string (0-indexed)
-   */
-  pos: number;
-
-  /**
-   * Source template string
-   */
+  /** Source template string */
   source: string;
 
-  /**
-   * Template filename (if available)
-   */
+  /** Template filename, when the source came from disk */
   filename?: string;
-}
-
-/**
- * Token position information
- */
-export interface TokenPosition {
-  line: number;
-  col: number;
-  pos: number;
 }

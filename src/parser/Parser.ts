@@ -166,10 +166,12 @@ export class Parser {
       throw createError('Expected VAR token', this.context.filename, token.line);
     }
 
+    // `escape` stays undefined when the tag carried no ESCAPE attribute, which
+    // is what lets default_escape apply without overriding an explicit NONE.
     return {
       type: 'VAR',
       name: token.name ?? '',
-      escape: token.escape ?? 'none',
+      escape: token.escape,
       default: token.default
     };
   }
@@ -273,6 +275,15 @@ export class Parser {
       }
 
       if (currentToken.type === 'ENDIF') {
+        // Perl requires </TMPL_IF> for TMPL_IF and </TMPL_UNLESS> for TMPL_UNLESS.
+        if (currentToken.closes !== undefined && currentToken.closes !== blockType) {
+          throw createError(
+            `found </TMPL_${currentToken.closes}> incorrectly terminating a <TMPL_${blockType}> (use </TMPL_${blockType}>)`,
+            this.context.filename,
+            currentToken.line
+          );
+        }
+
         const popped = this.context.blockStack.pop();
         if (popped?.type !== 'IF' && popped?.type !== 'UNLESS') {
           throw createError(

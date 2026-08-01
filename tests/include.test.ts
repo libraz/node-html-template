@@ -92,7 +92,7 @@ describe('TMPL_INCLUDE', () => {
         });
         return tmpl;
       });
-      result.toThrow(/Circular TMPL_INCLUDE detected/);
+      result.toThrow(/likely recursive includes/);
     });
 
     it('should detect self-referencing includes', () => {
@@ -106,7 +106,7 @@ describe('TMPL_INCLUDE', () => {
         });
         tmpl2.output();
       });
-      result.toThrow(/Circular TMPL_INCLUDE detected/);
+      result.toThrow(/likely recursive includes/);
 
       // Cleanup
       unlinkSync(selfPath);
@@ -141,7 +141,7 @@ describe('TMPL_INCLUDE', () => {
         });
         return tmpl;
       });
-      result.toThrow(/TMPL_INCLUDE recursion depth exceeded/);
+      result.toThrow(/likely recursive includes/);
 
       // Cleanup
       unlinkSync(chain1);
@@ -288,7 +288,7 @@ describe('TMPL_INCLUDE', () => {
         });
         return tmpl;
       });
-      result.toThrow(/NAME attribute required/);
+      result.toThrow(/No NAME given/);
     });
 
     it('should throw error for empty NAME attribute', () => {
@@ -299,7 +299,7 @@ describe('TMPL_INCLUDE', () => {
         });
         return tmpl;
       });
-      result.toThrow(/TMPL_INCLUDE requires NAME attribute/);
+      result.toThrow(/No NAME given/);
     });
   });
 

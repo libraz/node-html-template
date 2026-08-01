@@ -1,29 +1,41 @@
 /**
  * HTMLTemplate - Main template class
- * Compatible with Perl HTML::Template v2.98 core API and template syntax
  *
- * Public API for template loading, parameter management, and output generation.
+ * Public API for loading a template, setting parameters and producing output.
+ * Compatible with the core API and template syntax of Perl HTML::Template
+ * v2.98.
  *
  * @module HTMLTemplate
  */
 
-import { readFileSync } from 'node:fs';
-import type { Readable } from 'node:stream';
 import { CacheManager } from './cache/CacheManager.js';
+import { loadTemplateSource } from './loader/source.js';
+import { getGlobalOptions, normalizeOptions, setGlobalOptions } from './options.js';
+import { stripComments } from './parser/comments.js';
 import { processIncludes } from './parser/IncludeProcessor.js';
+import { buildParamScope, type ParamScope } from './parser/ParamScope.js';
 import { Parser } from './parser/Parser.js';
 import { Tokenizer } from './parser/Tokenizer.js';
 import { Context } from './runtime/Context.js';
 import { Executor } from './runtime/Executor.js';
-import type { HTMLTemplateOptions, OutputOptions, ParamValue, ParseNode, QueryOptions, QueryResult } from './types.js';
-import { parseOpenMode, readFileWithEncoding } from './utils/encoding.js';
-import { getFileMtime, resolveFile } from './utils/FileResolver.js';
+import { TemplateQuery } from './TemplateQuery.js';
+import type {
+  AssociateObject,
+  EscapeType,
+  HTMLTemplateOptions,
+  OutputOptions,
+  ParamValue,
+  ParseNode,
+  QueryOptions,
+  QueryResult
+} from './types.js';
+import { getFileMtime } from './utils/FileResolver.js';
+import { applyFilters } from './utils/filters.js';
 import { createError } from './utils/helpers.js';
 import { maybeCacheLazyLoop, maybeCacheLazyValue } from './utils/LazyValue.js';
 
 /**
  * HTMLTemplate class
- * Main entry point for template processing
  *
  * @example
  * ```ts
@@ -39,121 +51,47 @@ import { maybeCacheLazyLoop, maybeCacheLazyValue } from './utils/LazyValue.js';
  * ```
  */
 export class HTMLTemplate {
-  private static globalOptions: HTMLTemplateOptions = {
-    die_on_bad_params: true,
-    strict: true,
-    force_untaint: 0,
-    vanguard_compatibility_mode: false,
-    cache: false,
-    blind_cache: false,
-    file_cache: false,
-    file_cache_dir_mode: 0o700,
-    double_file_cache: false,
-    double_cache: false,
-    shared_cache: false,
-    shared_cache_debug: false,
-    memory_debug: false,
-    cache_lazy_vars: false,
-    cache_lazy_loops: false,
-    path: [],
-    search_path_on_include: false,
-    utf8: false,
-    debug: false,
-    stack_debug: false,
-    cache_debug: false,
-    associate: [],
-    case_sensitive: false,
-    loop_context_vars: false,
-    global_vars: false,
-    no_includes: false,
-    max_includes: 10,
-    die_on_missing_include: true,
-    filter: [],
-    default_escape: 'none'
-  };
-  /**
-   * Template options (normalized with defaults)
-   */
-  private options: Required<HTMLTemplateOptions>;
+  /** Normalized options with all defaults applied */
+  private readonly options: Required<HTMLTemplateOptions>;
+
+  /** Parsed template */
+  private readonly ast: ParseNode[];
+
+  /** Runtime parameter storage */
+  private readonly context: Context;
+
+  /** Parameter namespaces declared by the template */
+  private readonly paramScope: ParamScope;
+
+  /** Introspection over the template's parameter scopes */
+  private readonly introspection: TemplateQuery;
 
   /**
-   * Parsed template AST
-   */
-  private ast: ParseNode[];
-
-  /**
-   * Runtime context for parameter management
-   */
-  private context: Context;
-
-  /**
-   * Cache manager
-   */
-  private cacheManager: CacheManager;
-
-  /**
-   * Template source content (before parsing)
-   */
-  private templateSource: string;
-
-  /**
-   * Set of valid parameter names (for die_on_bad_params checking)
-   * Names are normalized according to case_sensitive option
-   */
-  private validParams: Set<string>;
-
-  /**
-   * Map of valid parameter names to their template type.
-   */
-  private paramTypes: Map<string, 'VAR' | 'LOOP'>;
-
-  /**
-   * Create new HTMLTemplate instance
+   * Create a new template instance.
    *
    * @param options - Template options
    */
   constructor(options: HTMLTemplateOptions) {
-    // Normalize options with defaults
-    this.options = HTMLTemplate.normalizeOptions(options);
-
-    // Initialize cache manager
-    this.cacheManager = new CacheManager(this.options);
-
-    // Initialize context
+    this.options = normalizeOptions(options);
     this.context = new Context(this.options);
 
-    // Load and parse template
-    const { source, filename } = this.loadTemplateSource();
-    this.templateSource = source;
+    const { source, filename } = loadTemplateSource(this.options);
+    const prepared = this.preprocess(source, filename);
 
-    // Apply filters
-    let filteredSource = this.applyFilters(this.templateSource);
-
-    // Strip TMPL_COMMENT blocks (before include processing)
-    filteredSource = HTMLTemplate.stripComments(filteredSource);
-
-    // Process includes
-    let includeMtimes = new Map<string, number>();
-    if (!this.options.no_includes) {
-      const includeResult = processIncludes(filteredSource, this.options, filename);
-      filteredSource = includeResult.source;
-      includeMtimes = includeResult.mtimes;
-    }
-
-    // Parse template (with caching)
-    this.ast = this.parseTemplate(filteredSource, filename, includeMtimes);
-
-    // Extract valid parameter names from AST (for die_on_bad_params checking)
-    this.paramTypes = this.extractParamTypes(this.ast);
-    this.validParams = new Set(this.paramTypes.keys());
+    this.ast = this.parseTemplate(prepared.source, filename, prepared.mtimes);
+    this.paramScope = buildParamScope(this.ast, this.options.case_sensitive, this.options.global_vars);
+    this.introspection = new TemplateQuery(this.paramScope, this.options.case_sensitive);
   }
 
+  // ==========================================================================
+  // Public API
+  // ==========================================================================
+
   /**
-   * Set parameter value(s)
-   * Can be called with name and value, or with object of name-value pairs
+   * Get, set, or list parameters.
    *
-   * @param nameOrParams - Parameter name or object with multiple parameters
-   * @param value - Parameter value (if first argument is string)
+   * @returns All top-level parameter names when called with no arguments,
+   *   the stored value when called with a name, and nothing when setting.
    */
   param(): string[];
   param(name: string): ParamValue | undefined;
@@ -163,59 +101,39 @@ export class HTMLTemplate {
     ...args: [] | [string] | [string, ParamValue] | [Record<string, ParamValue>]
   ): string[] | ParamValue | undefined {
     if (args.length === 0) {
-      return this.queryAllParams();
+      return this.introspection.topLevelNames();
     }
 
     const [nameOrParams, value] = args;
 
-    if (typeof nameOrParams === 'string' && args.length === 1) {
-      const normalizedName = this.options.case_sensitive ? nameOrParams : nameOrParams.toLowerCase();
-      if (this.options.die_on_bad_params && !this.validParams.has(normalizedName)) {
-        throw createError(
-          `HTML::Template : Attempt to get nonexistent parameter '${normalizedName}' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params set => 1)`
-        );
-      }
-      return this.context.getParam(nameOrParams);
-    }
-
     if (typeof nameOrParams === 'string') {
-      // Single parameter
-      const name = nameOrParams;
-
-      // Check if parameter exists in template (if die_on_bad_params)
-      const normalizedName = this.options.case_sensitive ? name : name.toLowerCase();
-      if (this.options.die_on_bad_params && !this.validParams.has(normalizedName)) {
-        throw createError(
-          `HTML::Template : Attempt to set nonexistent parameter '${normalizedName}' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params => 1)`
-        );
-      }
-
-      this.context.setParam(name, this.prepareParamValue(normalizedName, value));
-    } else if (nameOrParams && typeof nameOrParams === 'object') {
-      // Multiple parameters
-      const params = nameOrParams;
-      Object.entries(params).forEach(([key, val]) => {
-        this.param(key, val);
-      });
-    } else {
-      throw createError('HTML::Template->param() : Single reference arg to param() must be a hash-ref!');
+      return args.length === 1 ? this.getParam(nameOrParams) : this.setParam(nameOrParams, value);
     }
 
-    return undefined;
+    if (nameOrParams && typeof nameOrParams === 'object') {
+      for (const [key, val] of Object.entries(nameOrParams)) {
+        this.setParam(key, val);
+      }
+      return undefined;
+    }
+
+    throw createError('HTML::Template->param() : Single reference arg to param() must be a hash-ref!');
   }
 
   /**
-   * Generate output HTML
+   * Render the template.
    *
-   * @param options - Output options (optional)
-   * @returns Generated HTML string, or undefined if print_to is specified
+   * @param options - Output options
+   * @returns Rendered text, or undefined when `print_to` was given
    */
   output(options?: OutputOptions): string | undefined {
-    // Execute template
-    const executor = new Executor(this.context);
+    const executor = new Executor(
+      this.context,
+      { dieOnBadParams: this.options.die_on_bad_params, caseSensitive: this.options.case_sensitive },
+      this.paramScope
+    );
     const html = executor.execute(this.ast);
 
-    // If print_to specified, write to stream
     if (options?.print_to) {
       options.print_to.write(html);
       return undefined;
@@ -225,482 +143,302 @@ export class HTMLTemplate {
   }
 
   /**
-   * Query template structure
-   * Returns information about parameters in the template
+   * Inspect the template's structure.
    *
-   * Compatible with Perl HTML::Template query() method:
-   * - query() - returns array of all top-level parameter names
-   * - query({ name: 'foo' }) - returns 'VAR', 'LOOP', or undefined
-   * - query({ loop: 'foo' }) - returns array of parameter names in loop
+   * - `query()` lists the top-level parameter names
+   * - `query({ name })` reports `'VAR'`, `'LOOP'` or `undefined`
+   * - `query({ loop })` lists the names declared inside a loop
    *
    * @param options - Query options
    * @returns Query result
    */
   query(options?: QueryOptions): QueryResult | string[] | undefined {
-    if (!options) {
-      // No options: return all top-level parameter names
-      return this.queryAllParams();
-    }
-
-    if (options.name !== undefined) {
-      // Query specific parameter type
-      return this.queryParamType(options.name);
-    }
-
-    if (options.loop !== undefined) {
-      // Query parameters within a loop
-      return this.queryLoopParams(options.loop);
-    }
-
-    return undefined;
+    return this.introspection.query(options);
   }
 
   /**
-   * Clear all parameters
-   * Resets template to initial state
+   * Discard all parameter values.
    */
   clear(): void {
     this.context.clear();
   }
 
   /**
-   * Perl-compatible clear_params() alias.
+   * Perl-compatible alias for {@link HTMLTemplate.clear}.
    */
   clear_params(): void {
     this.clear();
   }
 
   /**
-   * Obsolete Perl-compatible associateCGI() method.
+   * Register a CGI-like object after construction.
+   *
+   * @param object - Object exposing a param() method
    */
   associateCGI(object: { param?: unknown }): void {
     if (!object || typeof object.param !== 'function') {
       throw createError('Warning! non-CGI object was passed to HTML::Template::associateCGI()!');
     }
-    this.context.addAssociate(object as never);
+    this.context.addAssociate(object as AssociateObject);
   }
 
+  /**
+   * Read or extend the process-wide default options.
+   *
+   * @param options - Overrides to install
+   * @returns The resulting global options
+   */
   static config(): HTMLTemplateOptions;
   static config(options: HTMLTemplateOptions): HTMLTemplateOptions;
   static config(options?: HTMLTemplateOptions): HTMLTemplateOptions {
-    if (options) {
-      HTMLTemplate.globalOptions = {
-        ...HTMLTemplate.globalOptions,
-        ...options,
-        associate:
-          options.associate !== undefined
-            ? [
-                ...HTMLTemplate.asArray(HTMLTemplate.globalOptions.associate),
-                ...HTMLTemplate.asArray(options.associate)
-              ]
-            : HTMLTemplate.globalOptions.associate,
-        filter:
-          options.filter !== undefined
-            ? [...HTMLTemplate.asArray(HTMLTemplate.globalOptions.filter), ...HTMLTemplate.asArray(options.filter)]
-            : HTMLTemplate.globalOptions.filter,
-        path:
-          options.path !== undefined
-            ? [...HTMLTemplate.asArray(HTMLTemplate.globalOptions.path), ...HTMLTemplate.asArray(options.path)]
-            : HTMLTemplate.globalOptions.path
-      };
-    }
-    return { ...HTMLTemplate.globalOptions };
+    return options ? setGlobalOptions(options) : getGlobalOptions();
   }
 
+  /**
+   * Construct from a filename.
+   *
+   * @param filename - Template filename
+   * @param options - Additional options
+   * @returns Template instance
+   */
   static new_file(filename: string, options: Omit<HTMLTemplateOptions, 'filename'> = {}): HTMLTemplate {
     return new HTMLTemplate({ ...options, filename });
   }
 
+  /**
+   * Construct from a string.
+   *
+   * @param scalarref - Template text
+   * @param options - Additional options
+   * @returns Template instance
+   */
   static new_scalar_ref(scalarref: string, options: Omit<HTMLTemplateOptions, 'scalarref'> = {}): HTMLTemplate {
     return new HTMLTemplate({ ...options, scalarref });
   }
 
+  /**
+   * Construct from an array of lines.
+   *
+   * @param arrayref - Template lines
+   * @param options - Additional options
+   * @returns Template instance
+   */
   static new_array_ref(arrayref: string[], options: Omit<HTMLTemplateOptions, 'arrayref'> = {}): HTMLTemplate {
     return new HTMLTemplate({ ...options, arrayref });
   }
 
-  static new_filehandle(filehandle: Readable, options: Omit<HTMLTemplateOptions, 'filehandle'> = {}): HTMLTemplate {
+  /**
+   * Construct from a readable stream.
+   *
+   * @param filehandle - Stream to read
+   * @param options - Additional options
+   * @returns Template instance
+   */
+  static new_filehandle(
+    filehandle: NonNullable<HTMLTemplateOptions['filehandle']>,
+    options: Omit<HTMLTemplateOptions, 'filehandle'> = {}
+  ): HTMLTemplate {
     return new HTMLTemplate({ ...options, filehandle });
   }
 
+  // ==========================================================================
+  // Parameter access
+  // ==========================================================================
+
   /**
-   * Normalize options with defaults
+   * Read a parameter, enforcing `die_on_bad_params`.
    *
-   * @param options - User-provided options
-   * @returns Normalized options with all defaults applied
+   * @param name - Parameter name
+   * @returns Stored value, or undefined
    */
-  private static normalizeOptions(options: HTMLTemplateOptions): Required<HTMLTemplateOptions> {
-    const mergedOptions = { ...HTMLTemplate.globalOptions, ...options };
-    HTMLTemplate.validateOptions(mergedOptions);
-
-    return {
-      // Source options
-      filename: mergedOptions.filename,
-      scalarref: mergedOptions.scalarref,
-      arrayref: mergedOptions.arrayref,
-      filehandle: mergedOptions.filehandle,
-      type: mergedOptions.type,
-      source: mergedOptions.source,
-
-      // Error detection
-      // vanguard_compatibility_mode implies die_on_bad_params: false
-      die_on_bad_params: mergedOptions.vanguard_compatibility_mode ? false : (mergedOptions.die_on_bad_params ?? true),
-      strict: mergedOptions.strict ?? true,
-      force_untaint: mergedOptions.force_untaint ?? 0,
-      vanguard_compatibility_mode: mergedOptions.vanguard_compatibility_mode ?? false,
-
-      // Caching
-      cache:
-        mergedOptions.cache ||
-        mergedOptions.blind_cache ||
-        mergedOptions.file_cache ||
-        mergedOptions.double_file_cache ||
-        false,
-      blind_cache: mergedOptions.blind_cache ?? false,
-      file_cache: mergedOptions.file_cache || mergedOptions.double_file_cache || false,
-      file_cache_dir: mergedOptions.file_cache_dir,
-      file_cache_dir_mode: mergedOptions.file_cache_dir_mode ?? 0o700,
-      double_file_cache: mergedOptions.double_file_cache ?? false,
-      double_cache: mergedOptions.double_cache ?? false,
-      shared_cache: mergedOptions.shared_cache ?? false,
-      shared_cache_debug: mergedOptions.shared_cache_debug ?? false,
-      memory_debug: mergedOptions.memory_debug ?? false,
-      cache_lazy_vars: mergedOptions.cache_lazy_vars ?? false,
-      cache_lazy_loops: mergedOptions.cache_lazy_loops ?? false,
-
-      // File system
-      path: HTMLTemplate.asArray(mergedOptions.path),
-      search_path_on_include: mergedOptions.search_path_on_include ?? false,
-      utf8: mergedOptions.utf8 ?? false,
-      open_mode: mergedOptions.utf8 ? 'utf-8' : mergedOptions.open_mode,
-
-      // Debugging
-      debug: mergedOptions.debug ?? false,
-      stack_debug: mergedOptions.stack_debug ?? false,
-      cache_debug: mergedOptions.cache_debug ?? false,
-
-      // Behavior
-      associate: HTMLTemplate.asArray(mergedOptions.associate),
-      case_sensitive: mergedOptions.case_sensitive ?? false,
-      loop_context_vars: mergedOptions.loop_context_vars ?? false,
-      global_vars: mergedOptions.global_vars ?? false,
-      no_includes: mergedOptions.no_includes ?? false,
-      max_includes: mergedOptions.max_includes ?? 10,
-      die_on_missing_include: mergedOptions.die_on_missing_include ?? true,
-      filter: HTMLTemplate.asArray(mergedOptions.filter),
-      default_escape: (mergedOptions.default_escape ?? 'none').toLowerCase() as never
-    } as Required<HTMLTemplateOptions>;
-  }
-
-  private static validateOptions(options: HTMLTemplateOptions): void {
-    if (options.type !== undefined) {
-      if (options.source === undefined) {
-        throw createError("HTML::Template->new called with 'type' parameter set, but no 'source'!");
-      }
-      if (!['filename', 'scalarref', 'arrayref', 'filehandle'].includes(options.type)) {
-        throw createError(
-          "HTML::Template->new called with invalid type parameter! Valid types are 'filename', 'scalarref', 'arrayref' and 'filehandle'."
-        );
-      }
-      return;
-    }
-
-    const sourceCount =
-      Number(options.filename !== undefined) +
-      Number(options.filehandle !== undefined) +
-      Number(options.arrayref !== undefined) +
-      Number(options.scalarref !== undefined);
-    if (sourceCount !== 1) {
-      throw createError(
-        'HTML::Template->new called with multiple (or no) template sources specified! A valid call to new() has exactly one filename, scalarref, arrayref or filehandle'
-      );
-    }
-
-    const hasNonFileSource =
-      options.filehandle !== undefined || options.arrayref !== undefined || options.scalarref !== undefined;
-    if (
-      hasNonFileSource &&
-      (options.cache ||
-        options.blind_cache ||
-        options.file_cache ||
-        options.shared_cache ||
-        options.double_cache ||
-        options.double_file_cache)
-    ) {
-      throw createError('Cannot have caching when template source is not file');
-    }
-
-    if ((options.file_cache || options.double_file_cache) && !options.file_cache_dir) {
-      throw createError('You must specify the file_cache_dir option if you want to use file_cache.');
-    }
-
-    if (options.utf8 && options.open_mode) {
-      throw createError('HTML::Template->new(): utf8 and open_mode cannot be used at the same time');
-    }
-
-    if (options.default_escape && !['none', 'html', 'url', 'js'].includes(options.default_escape.toLowerCase())) {
-      throw createError(
-        `HTML::Template->new(): Invalid setting for default_escape - '${options.default_escape}'. Valid values are 'none', 'html', 'url', or 'js'.`
-      );
-    }
-
-    for (const associate of HTMLTemplate.asArray(options.associate)) {
-      if (!associate || typeof associate.param !== 'function') {
-        throw createError(
-          'HTML::Template->new called with associate option, containing object which lacks a param() method!'
-        );
-      }
-    }
-  }
-
-  private static asArray<T>(value: T | T[] | undefined): T[] {
-    if (value === undefined) return [];
-    return Array.isArray(value) ? value : [value];
+  private getParam(name: string): ParamValue | undefined {
+    this.assertDeclared(name, 'get');
+    return this.context.getParam(name);
   }
 
   /**
-   * Load template source from options
-   * Handles filename, scalarref, arrayref, filehandle, or type/source
+   * Write a parameter, enforcing `die_on_bad_params` and the declared type.
    *
-   * @returns Template source and optional filename
+   * @param name - Parameter name
+   * @param value - Value to store
    */
-  private loadTemplateSource(): { source: string; filename?: string } {
-    // Check for alternative type/source specification
-    if (this.options.type && this.options.source !== undefined) {
-      const { type, source } = this.options;
-      switch (type) {
-        case 'filename':
-          return this.loadFromFile(source as string);
-        case 'scalarref':
-          return { source: source as string };
-        case 'arrayref':
-          return { source: (source as string[]).join('') };
-        case 'filehandle':
-          return { source: HTMLTemplate.readStream(source as Readable) };
-        default:
-          throw createError(`Unknown template type: ${type}`);
-      }
-    }
-
-    // Check for direct source specifications (in priority order)
-    if (this.options.scalarref !== undefined) {
-      return { source: this.options.scalarref };
-    }
-
-    if (this.options.arrayref !== undefined) {
-      return { source: this.options.arrayref.join('') };
-    }
-
-    if (this.options.filehandle !== undefined) {
-      return { source: HTMLTemplate.readStream(this.options.filehandle) };
-    }
-
-    if (this.options.filename !== undefined) {
-      return this.loadFromFile(this.options.filename);
-    }
-
-    throw createError('No template source specified (need filename, scalarref, arrayref, or filehandle)');
+  private setParam(name: string, value: ParamValue): undefined {
+    this.assertDeclared(name, 'set');
+    this.context.setParam(name, this.prepareParamValue(name, value));
+    return undefined;
   }
 
   /**
-   * Load template from file
+   * Reject names that the template never declares at its top level.
    *
-   * @param filename - Filename to load
-   * @returns Source content and resolved filename
-   */
-  private loadFromFile(filename: string): { source: string; filename: string } {
-    // Resolve file path
-    const resolved = resolveFile(filename, {
-      path: this.options.path,
-      searchPathOnInclude: this.options.search_path_on_include
-    });
-
-    // Determine encoding
-    let encoding: BufferEncoding | undefined;
-    if (this.options.utf8) {
-      encoding = 'utf-8';
-    } else if (this.options.open_mode) {
-      encoding = parseOpenMode(this.options.open_mode);
-    }
-
-    // Read file
-    const source = encoding
-      ? readFileWithEncoding(resolved.filepath, encoding)
-      : readFileSync(resolved.filepath, 'utf-8');
-
-    return { source, filename: resolved.filepath };
-  }
-
-  /**
-   * Read template from stream
+   * Perl checks against the top-level param_map only, so a name that exists
+   * solely inside a loop body is not settable from the outside.
    *
-   * @param stream - Readable stream
-   * @returns Template content
+   * @param name - Parameter name
+   * @param action - Whether the caller is reading or writing
    */
-  private static readStream(stream: Readable): string {
-    // Synchronous stream reading using readable iteration
-    const chunks: Buffer[] = [];
-    let chunk: Buffer | null;
-    chunk = stream.read() as Buffer | null;
-    while (chunk !== null) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-      chunk = stream.read() as Buffer | null;
-    }
+  private assertDeclared(name: string, action: 'get' | 'set'): void {
+    if (!this.options.die_on_bad_params) return;
+    if (this.introspection.topLevelType(name) !== undefined) return;
 
-    return Buffer.concat(chunks).toString('utf-8');
-  }
+    const normalized = this.options.case_sensitive ? name : name.toLowerCase();
+    const suffix = action === 'get' ? 'die_on_bad_params set => 1' : 'die_on_bad_params => 1';
 
-  /**
-   * Apply content filters to template source
-   *
-   * @param source - Template source
-   * @returns Filtered source
-   */
-  private applyFilters(source: string): string {
-    if (!this.options.filter) {
-      return source;
-    }
-
-    const filters = Array.isArray(this.options.filter) ? this.options.filter : [this.options.filter];
-
-    let filtered: string | string[] = source;
-
-    for (const filter of filters) {
-      // Convert to appropriate format
-      if (typeof filter === 'function') {
-        if (Array.isArray(filtered)) {
-          filtered = filtered.join('');
-        }
-        filtered = filter(filtered);
-      } else if (filter.format === 'array') {
-        // Convert to array if needed
-        if (typeof filtered === 'string') {
-          filtered = filtered.split(/(?<=\n)/);
-        }
-        filtered = filter.sub(filtered);
-      } else {
-        // scalar format (default)
-        // Convert to string if needed
-        if (Array.isArray(filtered)) {
-          filtered = filtered.join('');
-        }
-        filtered = filter.sub(filtered);
-      }
-    }
-
-    // Ensure final result is string
-    return Array.isArray(filtered) ? filtered.join('') : filtered;
-  }
-
-  /**
-   * Strip TMPL_COMMENT and TMPL_NOTE blocks from template source
-   *
-   * @param source - Template source
-   * @returns Source with comment blocks removed
-   */
-  private static stripComments(source: string): string {
-    return source.replace(
-      /<\s*(?:!--\s*)?TMPL_(?:COMMENT|NOTE)\b[^>]*(?:--\s*)?>([\s\S]*?)<\s*(?:!--\s*)?\/TMPL_(?:COMMENT|NOTE)\s*(?:--\s*)?>/gi,
-      ''
+    throw createError(
+      `HTML::Template : Attempt to ${action} nonexistent parameter '${normalized}' - this parameter name doesn't match any declarations in the template file : (${suffix})`
     );
   }
 
   /**
-   * Parse template with caching
+   * Check a value against the parameter's declared type and wrap lazy values
+   * for caching when requested.
    *
-   * @param source - Template source (after filtering and includes)
-   * @param filename - Optional filename for cache key
-   * @param includeMtimes - Mtimes of included files
-   * @returns Parsed AST
+   * @param name - Parameter name
+   * @param value - Value to store
+   * @returns Value as it should be stored
    */
-  private parseTemplate(source: string, filename?: string, includeMtimes?: Map<string, number>): ParseNode[] {
-    // Generate cache key
+  private prepareParamValue(name: string, value: ParamValue): ParamValue {
+    const paramType = this.introspection.topLevelType(name);
+    const normalized = this.options.case_sensitive ? name : name.toLowerCase();
+    const isLoopShaped = value === undefined || value === null || Array.isArray(value) || typeof value === 'function';
+
+    if (paramType === 'LOOP') {
+      if (!isLoopShaped) {
+        throw createError(
+          `HTML::Template::param() : attempt to set parameter '${normalized}' with a scalar - parameter is not a TMPL_VAR!`
+        );
+      }
+      return maybeCacheLazyLoop(value, this.options.cache_lazy_loops) as ParamValue;
+    }
+
+    if (paramType === 'VAR' && Array.isArray(value)) {
+      throw createError(
+        `HTML::Template::param() : attempt to set parameter '${normalized}' with an array ref - parameter is not a TMPL_LOOP!`
+      );
+    }
+
+    if (Array.isArray(value)) {
+      return maybeCacheLazyLoop(value, this.options.cache_lazy_loops) as ParamValue;
+    }
+
+    return maybeCacheLazyValue(value, this.options.cache_lazy_vars) as ParamValue;
+  }
+
+  // ==========================================================================
+  // Template preparation
+  // ==========================================================================
+
+  /**
+   * Run the pre-parse pipeline: filters, comment removal, include expansion.
+   *
+   * @param source - Raw template text
+   * @param filename - Path the text came from, if any
+   * @returns Prepared text and the modification times of included files
+   */
+  private preprocess(source: string, filename?: string): { source: string; mtimes: Map<string, number> } {
+    let prepared = applyFilters(source, this.options.filter);
+    prepared = stripComments(prepared);
+
+    if (this.options.no_includes) {
+      return { source: prepared, mtimes: new Map() };
+    }
+
+    const { source: expanded, mtimes } = processIncludes(prepared, this.options, filename);
+    return { source: expanded, mtimes };
+  }
+
+  /**
+   * Tokenize and parse the prepared text, consulting the cache first.
+   *
+   * @param source - Prepared template text
+   * @param filename - Path the template came from, if any
+   * @param includeMtimes - Modification times of included files
+   * @returns Parsed template
+   */
+  private parseTemplate(source: string, filename: string | undefined, includeMtimes: Map<string, number>): ParseNode[] {
+    const cacheManager = new CacheManager(this.options);
     const cacheKey = CacheManager.generateKey(this.cacheIdentifier(filename, source));
 
-    // Try cache
-    if (this.cacheManager.isEnabled()) {
-      const cached = this.cacheManager.get(cacheKey);
+    if (cacheManager.isEnabled()) {
+      const cached = cacheManager.get(cacheKey);
       if (cached) {
-        if (this.options.cache_debug) {
-          console.error('[HTMLTemplate] Cache HIT:', filename ?? 'inline');
-        }
+        this.logCache('HIT', filename);
         return cached.nodes;
       }
-      if (this.options.cache_debug) {
-        console.error('[HTMLTemplate] Cache MISS:', filename ?? 'inline');
-      }
+      this.logCache('MISS', filename);
     }
 
-    // Parse template
-    const tokenizer = new Tokenizer(source, filename, this.options.vanguard_compatibility_mode, this.options.strict);
-    const tokens = tokenizer.tokenize();
+    const tokens = new Tokenizer(
+      source,
+      filename,
+      this.options.vanguard_compatibility_mode,
+      this.options.strict
+    ).tokenize();
 
-    const parser = new Parser(tokens, filename, this.options.no_includes);
-    let ast = parser.parse();
+    let ast = new Parser(tokens, filename, this.options.no_includes).parse();
 
-    // Apply default_escape if specified
-    if (this.options.default_escape && this.options.default_escape !== 'none') {
-      ast = this.applyDefaultEscape(ast, this.options.default_escape);
+    if (this.options.default_escape !== 'none') {
+      ast = HTMLTemplate.applyDefaultEscape(ast, this.options.default_escape);
     }
 
-    // Store in cache
-    if (this.cacheManager.isEnabled() && filename) {
-      // Merge include mtimes with main file mtime
-      const mtimes = includeMtimes ?? new Map<string, number>();
-      // Add main file mtime if not already present
-      if (filename && !mtimes.has(filename)) {
-        const mainMtime = getFileMtime(filename);
-        if (mainMtime !== -1) {
-          mtimes.set(filename, mainMtime);
+    if (cacheManager.isEnabled() && filename) {
+      if (!includeMtimes.has(filename)) {
+        const mtime = getFileMtime(filename);
+        if (mtime !== -1) {
+          includeMtimes.set(filename, mtime);
         }
       }
-      this.cacheManager.set(cacheKey, ast, mtimes);
+      cacheManager.set(cacheKey, ast, includeMtimes);
     }
 
     return ast;
   }
 
   /**
-   * Apply default escape to VAR nodes that don't have explicit escape
+   * Apply `default_escape` to every variable that carries no ESCAPE attribute.
    *
-   * @param nodes - ParseNode array
-   * @param defaultEscape - Default escape type
-   * @returns Modified AST with default escape applied
+   * An explicit `ESCAPE=NONE` records the escape type, so it survives here and
+   * suppresses the default exactly as it does in Perl.
+   *
+   * @param nodes - Parsed nodes
+   * @param defaultEscape - Escape type to apply
+   * @returns Nodes with the default applied
    */
-  private applyDefaultEscape(nodes: ParseNode[], defaultEscape: string): ParseNode[] {
+  private static applyDefaultEscape(nodes: ParseNode[], defaultEscape: EscapeType): ParseNode[] {
     return nodes.map((node) => {
-      if (node.type === 'VAR') {
-        // Only apply default if current escape is 'none'
-        if (node.escape === 'none') {
+      switch (node.type) {
+        case 'VAR':
+          return node.escape === undefined ? { ...node, escape: defaultEscape } : node;
+        case 'LOOP':
+          return { ...node, body: HTMLTemplate.applyDefaultEscape(node.body, defaultEscape) };
+        case 'COND':
           return {
             ...node,
-            escape: defaultEscape as 'html' | 'js' | 'url' | 'none'
+            consequent: HTMLTemplate.applyDefaultEscape(node.consequent, defaultEscape),
+            alternate: node.alternate ? HTMLTemplate.applyDefaultEscape(node.alternate, defaultEscape) : undefined
           };
-        }
-        return node;
+        default:
+          return node;
       }
-      if (node.type === 'LOOP') {
-        return {
-          ...node,
-          body: this.applyDefaultEscape(node.body, defaultEscape)
-        };
-      }
-      if (node.type === 'COND') {
-        return {
-          ...node,
-          consequent: this.applyDefaultEscape(node.consequent, defaultEscape),
-          alternate: node.alternate ? this.applyDefaultEscape(node.alternate, defaultEscape) : undefined
-        };
-      }
-      return node;
     });
   }
 
+  /**
+   * Build the cache identity for this template.
+   *
+   * Every option that changes the parse result has to appear here, otherwise
+   * two templates that differ only in options would share a cache entry.
+   *
+   * @param filename - Path the template came from, if any
+   * @param source - Prepared template text
+   * @returns Cache identity string
+   */
   private cacheIdentifier(filename: string | undefined, source: string): string {
     return JSON.stringify({
       template: filename ?? source,
       path: this.options.path,
       search_path_on_include: this.options.search_path_on_include,
+      case_sensitive: this.options.case_sensitive,
       loop_context_vars: this.options.loop_context_vars,
       global_vars: this.options.global_vars,
       open_mode: this.options.open_mode,
@@ -711,282 +449,15 @@ export class HTMLTemplate {
     });
   }
 
-  private prepareParamValue(name: string, value: ParamValue): ParamValue {
-    const paramType = this.paramTypes.get(name);
-
-    if (!paramType) {
-      if (Array.isArray(value)) {
-        return maybeCacheLazyLoop(value, this.options.cache_lazy_loops) as ParamValue;
-      }
-      return maybeCacheLazyValue(value, this.options.cache_lazy_vars) as ParamValue;
-    }
-
-    if (paramType === 'LOOP') {
-      if (value !== undefined && value !== null && !Array.isArray(value) && typeof value !== 'function') {
-        throw createError(
-          `HTML::Template::param() : attempt to set parameter '${name}' with a scalar - parameter is not a TMPL_VAR!`
-        );
-      }
-      return maybeCacheLazyLoop(value, this.options.cache_lazy_loops) as ParamValue;
-    }
-
-    if (Array.isArray(value)) {
-      throw createError(
-        `HTML::Template::param() : attempt to set parameter '${name}' with an array ref - parameter is not a TMPL_LOOP!`
-      );
-    }
-    return maybeCacheLazyValue(value, this.options.cache_lazy_vars) as ParamValue;
-  }
-
   /**
-   * Extract all parameter names from AST
-   * Used for die_on_bad_params validation
+   * Emit a cache hit/miss line when `cache_debug` is on.
    *
-   * @param nodes - ParseNode array
-   * @returns Set of parameter names (normalized according to case_sensitive)
+   * @param result - Outcome to report
+   * @param filename - Template being looked up
    */
-  private extractParamTypes(nodes: ParseNode[]): Map<string, 'VAR' | 'LOOP'> {
-    const params = new Map<string, 'VAR' | 'LOOP'>();
-
-    const setParamType = (name: string, type: 'VAR' | 'LOOP'): void => {
-      const existing = params.get(name);
-      if (existing === 'LOOP') {
-        return;
-      }
-      params.set(name, type);
-    };
-
-    const processNode = (node: ParseNode): void => {
-      if (node.type === 'VAR') {
-        // Add variable name
-        const name = this.options.case_sensitive ? node.name : node.name.toLowerCase();
-        setParamType(name, 'VAR');
-      } else if (node.type === 'LOOP') {
-        // Add loop name
-        const name = this.options.case_sensitive ? node.name : node.name.toLowerCase();
-        setParamType(name, 'LOOP');
-        // Process loop body
-        node.body.forEach(processNode);
-      } else if (node.type === 'COND') {
-        // Add condition name
-        const name = this.options.case_sensitive ? node.name : node.name.toLowerCase();
-        setParamType(name, 'VAR');
-        // Process consequent
-        node.consequent.forEach(processNode);
-        // Process alternate if exists
-        if (node.alternate) {
-          node.alternate.forEach(processNode);
-        }
-      }
-    };
-
-    nodes.forEach(processNode);
-    return params;
-  }
-
-  /**
-   * Query all top-level parameter names
-   * Returns array of parameter names found in template
-   *
-   * @returns Array of parameter names
-   */
-  private queryAllParams(): string[] {
-    const params = new Set<string>();
-
-    const processNode = (node: ParseNode): void => {
-      if (node.type === 'VAR') {
-        params.add(node.name);
-      } else if (node.type === 'LOOP') {
-        params.add(node.name);
-      } else if (node.type === 'COND') {
-        params.add(node.name);
-      }
-    };
-
-    this.ast.forEach(processNode);
-    return Array.from(params).sort();
-  }
-
-  /**
-   * Query parameter type
-   * Returns 'VAR', 'LOOP', or undefined for a specific parameter
-   *
-   * @param name - Parameter name (string or array path)
-   * @returns Parameter type or undefined if not found
-   */
-  private queryParamType(name: string | string[]): QueryResult {
-    // Normalize name to array path
-    const path = Array.isArray(name) ? name : [name];
-    const targetName = path[path.length - 1];
-
-    if (!targetName) {
-      return undefined;
+  private logCache(result: 'HIT' | 'MISS', filename?: string): void {
+    if (this.options.cache_debug) {
+      console.error(`[HTMLTemplate] Cache ${result}:`, filename ?? 'inline');
     }
-
-    const nodes = this.resolveQueryScope(path.slice(0, -1));
-    return nodes ? this.findParamTypeInNodes(targetName, nodes, path.length === 1) : undefined;
-  }
-
-  /**
-   * Find parameter type in node array
-   *
-   * @param name - Parameter name to find
-   * @param nodes - Nodes to search
-   * @returns Parameter type or undefined
-   */
-  private findParamTypeInNodes(name: string, nodes: ParseNode[], recursive = true): QueryResult {
-    const normalizeName = (n: string): string => (this.options.case_sensitive ? n : n.toLowerCase());
-
-    const normalizedTarget = normalizeName(name);
-
-    for (const node of nodes) {
-      if (node.type === 'VAR' && normalizeName(node.name) === normalizedTarget) {
-        return 'VAR';
-      }
-      if (node.type === 'LOOP' && normalizeName(node.name) === normalizedTarget) {
-        return 'LOOP';
-      }
-      if (node.type === 'COND' && normalizeName(node.name) === normalizedTarget) {
-        // Conditionals are treated as VARs in query
-        return 'VAR';
-      }
-
-      // Search recursively
-      if (recursive && node.type === 'LOOP') {
-        const result = this.findParamTypeInNodes(name, node.body);
-        if (result) {
-          return result;
-        }
-      } else if (recursive && node.type === 'COND') {
-        const result1 = this.findParamTypeInNodes(name, node.consequent);
-        if (result1) {
-          return result1;
-        }
-        if (node.alternate) {
-          const result2 = this.findParamTypeInNodes(name, node.alternate);
-          if (result2) {
-            return result2;
-          }
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Find loop node by name
-   *
-   * @param name - Loop name
-   * @param nodes - Nodes to search
-   * @returns Loop node or undefined
-   */
-  private findLoop(name: string, nodes: ParseNode[]): ParseNode | undefined {
-    const normalizeName = (n: string): string => (this.options.case_sensitive ? n : n.toLowerCase());
-
-    const normalizedTarget = normalizeName(name);
-
-    for (const node of nodes) {
-      if (node.type === 'LOOP' && normalizeName(node.name) === normalizedTarget) {
-        return node;
-      }
-
-      // Search recursively
-      if (node.type === 'LOOP') {
-        const result = this.findLoop(name, node.body);
-        if (result) {
-          return result;
-        }
-      } else if (node.type === 'COND') {
-        const result1 = this.findLoop(name, node.consequent);
-        if (result1) {
-          return result1;
-        }
-        if (node.alternate) {
-          const result2 = this.findLoop(name, node.alternate);
-          if (result2) {
-            return result2;
-          }
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  private findLoopAtCurrentLevel(name: string, nodes: ParseNode[]): ParseNode | undefined {
-    const normalizeName = (n: string): string => (this.options.case_sensitive ? n : n.toLowerCase());
-    const normalizedTarget = normalizeName(name);
-
-    for (const node of nodes) {
-      if (node.type === 'LOOP' && normalizeName(node.name) === normalizedTarget) {
-        return node;
-      }
-    }
-
-    return undefined;
-  }
-
-  private resolveQueryScope(path: string[]): ParseNode[] | undefined {
-    let nodes = this.ast;
-
-    for (const loopName of path) {
-      const loopNode = this.findLoopAtCurrentLevel(loopName, nodes);
-      if (!loopNode || loopNode.type !== 'LOOP') {
-        return undefined;
-      }
-      nodes = loopNode.body;
-    }
-
-    return nodes;
-  }
-
-  /**
-   * Query parameters within a loop
-   * Returns array of parameter names found in the specified loop
-   *
-   * @param loop - Loop name (string or array path)
-   * @returns Array of parameter names or undefined if loop not found
-   */
-  private queryLoopParams(loop: string | string[]): string[] | undefined {
-    // Normalize loop to array path
-    const path = Array.isArray(loop) ? loop : [loop];
-    if (!path[path.length - 1]) {
-      return undefined;
-    }
-
-    const parentNodes = path.length === 1 ? this.ast : this.resolveQueryScope(path.slice(0, -1));
-    const loopName = path[path.length - 1] ?? '';
-    const loopNode =
-      parentNodes && path.length === 1
-        ? this.findLoop(loopName, parentNodes)
-        : parentNodes
-          ? this.findLoopAtCurrentLevel(loopName, parentNodes)
-          : undefined;
-    if (!loopNode || loopNode.type !== 'LOOP') {
-      throw createError(
-        `HTML::Template::query() : Search path [${path.join(', ')}] doesn't end in a TMPL_LOOP - it is an error to use the 'loop' option on a non-loop parameter.`
-      );
-    }
-
-    // Extract parameter names from loop body
-    const params = new Set<string>();
-
-    const processNode = (node: ParseNode): void => {
-      if (node.type === 'VAR') {
-        params.add(node.name);
-      } else if (node.type === 'LOOP') {
-        params.add(node.name);
-      } else if (node.type === 'COND') {
-        params.add(node.name);
-        node.consequent.forEach(processNode);
-        if (node.alternate) {
-          node.alternate.forEach(processNode);
-        }
-      }
-    };
-
-    loopNode.body.forEach(processNode);
-    return Array.from(params).sort();
   }
 }

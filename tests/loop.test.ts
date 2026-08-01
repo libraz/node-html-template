@@ -128,7 +128,9 @@ describe('TMPL_LOOP Tests', () => {
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_IF NAME="__inner__">I</TMPL_IF></TMPL_LOOP>',
         loop_context_vars: true
       });
-      tmpl.param('items', [{ x: '1' }, { x: '2' }, { x: '3' }, { x: '4' }]);
+      // Loop data may only carry keys the loop body declares, so these
+      // iterations are empty apart from the context variables.
+      tmpl.param('items', [{}, {}, {}, {}]);
       expect(tmpl.output()).toBe('II'); // Inner is true for 2nd and 3rd items
     });
 
@@ -137,7 +139,7 @@ describe('TMPL_LOOP Tests', () => {
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_IF NAME="__outer__">O</TMPL_IF></TMPL_LOOP>',
         loop_context_vars: true
       });
-      tmpl.param('items', [{ x: '1' }, { x: '2' }, { x: '3' }]);
+      tmpl.param('items', [{}, {}, {}]);
       expect(tmpl.output()).toBe('OO'); // Outer is true for 1st and 3rd items
     });
 
@@ -226,17 +228,19 @@ describe('TMPL_LOOP Tests', () => {
     it('should handle nested loops with global_vars', () => {
       const tmpl = new HTMLTemplate({
         scalarref:
-          '<TMPL_LOOP NAME="outer"><TMPL_VAR NAME="top">.<TMPL_LOOP NAME="inner"><TMPL_VAR NAME="top"><TMPL_VAR NAME="mid"></TMPL_LOOP></TMPL_LOOP>',
+          '<TMPL_LOOP NAME="outer"><TMPL_VAR NAME="top">.<TMPL_VAR NAME="mid"><TMPL_LOOP NAME="inner"><TMPL_VAR NAME="top"><TMPL_VAR NAME="mid"></TMPL_LOOP></TMPL_LOOP>',
         global_vars: true
       });
       tmpl.param('top', 'T');
+      // global_vars publishes names to the top level, not to intermediate
+      // loops, so 'mid' has to be declared in the loop it is set on.
       tmpl.param('outer', [
         {
           mid: 'M',
           inner: [{}]
         }
       ]);
-      expect(tmpl.output()).toBe('T.TM');
+      expect(tmpl.output()).toBe('T.MTM');
     });
   });
 

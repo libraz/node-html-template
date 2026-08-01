@@ -113,28 +113,45 @@ export class Context {
       }
     }
 
-    // Search associate objects (in reverse order - last has priority)
+    // Perl fills associated values into the top-level parameter map only, so
+    // they must not resolve names that are missing from a loop iteration.
+    if (this.currentScope === this.rootScope) {
+      return this.lookupAssociate(name, normalizedName);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Query associate objects for a parameter value.
+   * Objects are searched in reverse order, so the last one registered wins.
+   *
+   * @param name - Parameter name as written by the caller
+   * @param normalizedName - Name after case normalization
+   * @returns Value from an associate object, or undefined
+   */
+  private lookupAssociate(name: string, normalizedName: string): ParamValue | undefined {
     for (let i = this.associates.length - 1; i >= 0; i -= 1) {
       const associate = this.associates[i];
-      if (associate) {
-        let associateName = name;
-        if (!this.options.case_sensitive) {
-          const associateParamNames = associate.param();
-          if (Array.isArray(associateParamNames)) {
-            const matchedName = associateParamNames.find(
-              (paramName): paramName is string =>
-                typeof paramName === 'string' && paramName.toLowerCase() === normalizedName
-            );
-            if (matchedName) {
-              associateName = matchedName;
-            }
+      if (!associate) continue;
+
+      let associateName = name;
+      if (!this.options.case_sensitive) {
+        const associateParamNames = associate.param();
+        if (Array.isArray(associateParamNames)) {
+          const matchedName = associateParamNames.find(
+            (paramName): paramName is string =>
+              typeof paramName === 'string' && paramName.toLowerCase() === normalizedName
+          );
+          if (matchedName) {
+            associateName = matchedName;
           }
         }
+      }
 
-        const associateValue = associate.param(associateName);
-        if (associateValue !== undefined && !Array.isArray(associateValue)) {
-          return associateValue;
-        }
+      const associateValue = associate.param(associateName);
+      if (associateValue !== undefined && !Array.isArray(associateValue)) {
+        return associateValue;
       }
     }
 
@@ -160,17 +177,25 @@ export class Context {
    * @returns String value
    */
   getVarValue(name: string, defaultValue?: string): string {
-    const value = this.getParam(name);
+    return this.resolveVarValue(name) ?? defaultValue ?? '';
+  }
 
-    // Evaluate lazy value
-    const finalValue = getFinalValue(value);
+  /**
+   * Resolve a variable to its string value.
+   *
+   * Returns `undefined` when the parameter is unset, which callers need in
+   * order to distinguish "no value, use DEFAULT" from "value is empty string".
+   *
+   * @param name - Variable name
+   * @returns String value, or undefined when the parameter is unset
+   */
+  resolveVarValue(name: string): string | undefined {
+    const finalValue = getFinalValue(this.getParam(name));
 
-    // Use default if value is undefined/null
     if (finalValue === undefined || finalValue === null) {
-      return defaultValue ?? '';
+      return undefined;
     }
 
-    // Convert to string
     return String(finalValue);
   }
 
@@ -258,27 +283,38 @@ export class Context {
   private addLoopContextVars(scope: Scope, index: number, length: number): void {
     const caseSensitive = this.options.case_sensitive ?? false;
 
-    // Note: In case_sensitive mode, loop context vars should be lowercase only
-    // In case_insensitive mode, they work with any case but are stored normalized
+    // Loop context variables are always spelled in lowercase in templates, but
+    // they still go through name normalization so case_sensitive mode matches.
     const setVar = (name: string, value: ParamValue): void => {
-      const normalizedName = normalizeParamName(name, caseSensitive);
-      scope.params.set(normalizedName, value);
+      scope.params.set(normalizeParamName(name, caseSensitive), value);
     };
 
-    const isFirst = index === 0;
-    const isLast = index === length - 1;
-    const counter = index + 1; // 1-based
+    // HTML::Template::LOOP::output assigns these per branch rather than from a
+    // single boolean expression, which is why a false value is sometimes the
+    // number 0 and sometimes the empty string. Templates that print a context
+    // variable directly can observe the difference, so it is reproduced here.
+    let first: number | string;
+    let inner: number | string;
+    let outer: number | string;
+    let last: number | string;
 
-    // Use Perl-compatible values: 1 for true, '' for false
-    const perlBool = (v: boolean): number | string => (v ? 1 : '');
+    if (index === 0) {
+      [first, inner, outer, last] = [1, 0, 1, length === 1 ? 1 : ''];
+    } else if (index === length - 1) {
+      [first, inner, outer, last] = [0, 0, 1, 1];
+    } else {
+      [first, inner, outer, last] = [0, 1, 0, 0];
+    }
 
-    setVar('__first__', perlBool(isFirst));
-    setVar('__last__', perlBool(isLast));
-    setVar('__inner__', perlBool(!isFirst && !isLast));
-    setVar('__outer__', perlBool(isFirst || isLast));
-    setVar('__odd__', perlBool(counter % 2 === 1));
-    setVar('__even__', perlBool(counter % 2 === 0));
-    setVar('__counter__', counter);
+    const odd = index % 2 === 0;
+
+    setVar('__first__', first);
+    setVar('__inner__', inner);
+    setVar('__outer__', outer);
+    setVar('__last__', last);
+    setVar('__odd__', odd ? 1 : '');
+    setVar('__even__', odd ? '' : 1);
+    setVar('__counter__', index + 1);
     setVar('__index__', index);
   }
 

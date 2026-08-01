@@ -239,13 +239,31 @@ describe('nested loop scope isolation', () => {
 // ============================================================================
 
 describe('loop context vars Perl compatibility', () => {
-  it('should render __first__ as 1 and empty string', () => {
+  it('should render __first__ the way HTML::Template::LOOP assigns it', () => {
     const tmpl = new HTMLTemplate({
       scalarref: '<TMPL_LOOP NAME="items">[<TMPL_VAR NAME="__first__">]</TMPL_LOOP>',
       loop_context_vars: true
     });
     tmpl.param('items', [{}, {}, {}]);
-    expect(tmpl.output()).toBe('[1][][]');
+    expect(tmpl.output()).toBe('[1][0][0]');
+  });
+
+  it('renders __last__ as an empty string on the first of several iterations', () => {
+    const tmpl = new HTMLTemplate({
+      scalarref: '<TMPL_LOOP NAME="items">[<TMPL_VAR NAME="__last__">]</TMPL_LOOP>',
+      loop_context_vars: true
+    });
+    tmpl.param('items', [{}, {}]);
+    expect(tmpl.output()).toBe('[][1]');
+  });
+
+  it('renders __last__ as 1 for a single-iteration loop', () => {
+    const tmpl = new HTMLTemplate({
+      scalarref: '<TMPL_LOOP NAME="items">[<TMPL_VAR NAME="__last__">]</TMPL_LOOP>',
+      loop_context_vars: true
+    });
+    tmpl.param('items', [{}]);
+    expect(tmpl.output()).toBe('[1]');
   });
 
   it('should render __counter__ as number', () => {
@@ -305,7 +323,7 @@ describe('malformed templates', () => {
   it('should throw on missing NAME in TMPL_VAR', () => {
     expect(() => {
       new HTMLTemplate({ scalarref: '<TMPL_VAR>' });
-    }).toThrow(/NAME attribute required/);
+    }).toThrow(/No NAME given/);
   });
 });
 

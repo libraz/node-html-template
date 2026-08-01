@@ -111,6 +111,11 @@ export interface OutputOptions {
 export type QueryResult = 'VAR' | 'LOOP' | undefined;
 
 /**
+ * Template-declared type of a parameter
+ */
+export type ParamType = 'VAR' | 'LOOP';
+
+/**
  * Query options for query() method
  */
 export interface QueryOptions {
@@ -638,9 +643,10 @@ export type TokenType =
 export interface Token {
   type: TokenType;
   name?: string; // Parameter name (for VAR, LOOP, IF, UNLESS, INCLUDE)
-  escape?: EscapeType; // Escape type (for VAR)
+  escape?: EscapeType; // Escape type (for VAR); undefined means no ESCAPE attribute
   default?: string; // Default value (for VAR)
   content?: string; // Text content (for TEXT tokens)
+  closes?: 'IF' | 'UNLESS'; // Which spelling closed the block (for ENDIF)
   line?: number; // Line number in source
   col?: number; // Column number in source
 }
@@ -680,7 +686,17 @@ export interface TextNode extends BaseParseNode {
 export interface VarNode extends BaseParseNode {
   type: 'VAR';
   name: string;
-  escape: EscapeType;
+
+  /**
+   * Escape type from the ESCAPE attribute.
+   * `undefined` means the attribute was absent, which is what lets
+   * `default_escape` apply without overriding an explicit `ESCAPE=NONE`.
+   */
+  escape?: EscapeType;
+
+  /**
+   * DEFAULT attribute value, written verbatim when the parameter is unset.
+   */
   default?: string;
 }
 

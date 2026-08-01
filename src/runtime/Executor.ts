@@ -1,47 +1,54 @@
 /**
  * Template executor
- * Executes ParseNode tree and generates output
- *
- * Features:
- * - Recursive node execution
- * - Variable substitution with escaping
- * - Loop iteration
- * - Conditional evaluation
- * - High-performance string building
+ * Walks the parsed template and produces its output
  *
  * @module runtime/Executor
  */
 
-import type { CondNode, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
-import { fastJoin } from '../utils/helpers.js';
+import type { ParamScope } from '../parser/ParamScope.js';
+import type { CondNode, LoopDataItem, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
+import { fastJoin, normalizeParamName } from '../utils/helpers.js';
 import type { Context } from './Context.js';
 import { escapeValue } from './Escape.js';
 
 /**
- * Template executor
- * Executes ParseNode tree with given context
+ * Settings the executor needs at render time.
+ */
+export interface ExecutorOptions {
+  /** Reject loop iteration keys the loop body never declares */
+  dieOnBadParams: boolean;
+
+  /** Whether parameter names keep their case */
+  caseSensitive: boolean;
+}
+
+/**
+ * Renders a parsed template against a runtime context.
  */
 export class Executor {
-  /**
-   * Execution context
-   */
-  private context: Context;
+  private readonly context: Context;
+
+  private readonly options: ExecutorOptions;
+
+  /** Parameter scope matching the block currently being rendered */
+  private scope: ParamScope | undefined;
 
   /**
-   * Create executor
-   *
-   * @param context - Execution context with parameters
+   * @param context - Runtime context holding parameter values
+   * @param options - Render-time settings
+   * @param scope - Parameter scope of the template's top level
    */
-  constructor(context: Context) {
+  constructor(context: Context, options: ExecutorOptions, scope?: ParamScope) {
     this.context = context;
+    this.options = options;
+    this.scope = scope;
   }
 
   /**
-   * Execute ParseNode tree and generate output
-   * Main entry point for template execution
+   * Render a list of nodes.
    *
-   * @param nodes - ParseNode array (AST)
-   * @returns Generated output string
+   * @param nodes - Nodes to render
+   * @returns Rendered text
    */
   execute(nodes: ParseNode[]): string {
     const parts: string[] = [];
@@ -57,127 +64,137 @@ export class Executor {
   }
 
   /**
-   * Execute single ParseNode
+   * Render a single node.
    *
-   * @param node - Node to execute
-   * @returns Output string from this node
+   * @param node - Node to render
+   * @returns Rendered text
    */
   private executeNode(node: ParseNode): string {
     switch (node.type) {
       case 'TEXT':
         return Executor.executeTextNode(node);
-
       case 'VAR':
         return this.executeVarNode(node);
-
       case 'LOOP':
         return this.executeLoopNode(node);
-
       case 'COND':
         return this.executeCondNode(node);
-
-      case 'NOOP':
-        // No-op nodes produce no output
-        return '';
-
       default:
-        // TypeScript exhaustiveness check ensures this never happens
         return '';
     }
   }
 
   /**
-   * Execute TEXT node
-   * Simply returns the text content
+   * Render literal text.
    *
    * @param node - Text node
-   * @returns Text content
+   * @returns The node's content
    */
   private static executeTextNode(node: TextNode): string {
     return node.content;
   }
 
   /**
-   * Execute VAR node
-   * Substitutes variable value with optional escaping
+   * Render a variable, applying its escape or its default.
    *
    * @param node - Variable node
-   * @returns Substituted and escaped value
+   * @returns Rendered text
    */
   private executeVarNode(node: VarNode): string {
-    // Get value from context
-    const value = this.context.getVarValue(node.name, node.default);
+    const value = this.context.resolveVarValue(node.name);
 
-    // Apply escaping
-    return escapeValue(value, node.escape);
+    if (value === undefined) {
+      // HTML::Template::DEF writes the default straight to the output and
+      // skips the escape op, so a DEFAULT is never escaped.
+      return node.default ?? '';
+    }
+
+    return node.escape === undefined ? value : escapeValue(value, node.escape);
   }
 
   /**
-   * Execute LOOP node
-   * Iterates over loop data and executes body for each iteration
+   * Render a loop once per iteration.
    *
    * @param node - Loop node
-   * @returns Concatenated output from all iterations
+   * @returns Concatenated output of every iteration
    */
   private executeLoopNode(node: LoopNode): string {
-    // Get loop data
     const loopData = this.context.getLoopData(node.name);
-
-    // Empty loop produces no output
     if (loopData.length === 0) {
       return '';
     }
 
+    const outerScope = this.scope;
+    const loopScope = outerScope?.loops.get(this.normalize(node.name));
     const parts: string[] = [];
 
-    // Execute body for each iteration
-    for (let i = 0; i < loopData.length; i += 1) {
-      const iterationData = loopData[i];
-      if (!iterationData) continue;
+    this.scope = loopScope;
 
-      // Push scope with iteration data
-      this.context.pushScope(iterationData, i, loopData.length);
+    try {
+      for (let i = 0; i < loopData.length; i += 1) {
+        const iterationData = loopData[i];
+        if (!iterationData) continue;
 
-      // Execute loop body
-      const output = this.execute(node.body);
-      parts.push(output);
+        this.validateIteration(iterationData, loopScope);
 
-      // Pop scope
-      this.context.popScope();
+        this.context.pushScope(iterationData, i, loopData.length);
+        parts.push(this.execute(node.body));
+        this.context.popScope();
+      }
+    } finally {
+      this.scope = outerScope;
     }
 
     return fastJoin(parts);
   }
 
   /**
-   * Execute COND node (IF/UNLESS)
-   * Evaluates condition and executes appropriate branch
+   * Reject iteration keys the loop body never declares.
+   *
+   * Perl passes each iteration hash to the loop's own sub-template, so
+   * `die_on_bad_params` catches typos in loop data exactly as it does for
+   * top-level parameters.
+   *
+   * @param iterationData - One iteration's parameters
+   * @param loopScope - Parameter scope of the loop body
+   */
+  private validateIteration(iterationData: LoopDataItem, loopScope: ParamScope | undefined): void {
+    if (!this.options.dieOnBadParams || !loopScope) return;
+
+    for (const key of Object.keys(iterationData)) {
+      const name = this.normalize(key);
+      if (loopScope.types.has(name)) continue;
+
+      throw new Error(
+        `HTML::Template->output() : fatal error in loop output : HTML::Template : Attempt to set nonexistent parameter '${name}' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params => 1)`
+      );
+    }
+  }
+
+  /**
+   * Render the branch a conditional selects.
    *
    * @param node - Conditional node
-   * @returns Output from executed branch
+   * @returns Rendered text of the selected branch
    */
   private executeCondNode(node: CondNode): string {
-    // Evaluate condition
-    const conditionValue = this.context.isConditionTrue(node.name);
+    const isTrue = this.context.isConditionTrue(node.name);
+    const takeConsequent = node.condition === 'if' ? isTrue : !isTrue;
 
-    // Determine which branch to execute
-    // IF: execute consequent if condition is true
-    // UNLESS: execute consequent if condition is false
-    let shouldExecuteConsequent: boolean;
-    if (node.condition === 'if') {
-      shouldExecuteConsequent = conditionValue;
-    } else {
-      // 'unless'
-      shouldExecuteConsequent = !conditionValue;
-    }
-
-    // Execute appropriate branch
-    if (shouldExecuteConsequent) {
+    if (takeConsequent) {
       return this.execute(node.consequent);
     }
-    if (node.alternate) {
-      return this.execute(node.alternate);
-    }
-    return '';
+
+    return node.alternate ? this.execute(node.alternate) : '';
+  }
+
+  /**
+   * Normalize a parameter name for scope lookup.
+   *
+   * @param name - Raw name
+   * @returns Normalized name
+   */
+  private normalize(name: string): string {
+    return normalizeParamName(name, this.options.caseSensitive);
   }
 }

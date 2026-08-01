@@ -82,7 +82,7 @@ describe('die_on_bad_params option', () => {
       result.toThrow(/Attempt to set nonexistent parameter/);
     });
 
-    it('should validate nested parameters', () => {
+    it('should reject loop-scoped names at the top level', () => {
       const tmpl = new HTMLTemplate({
         scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="name"> <TMPL_VAR NAME="value"></TMPL_LOOP>'
       });
@@ -91,19 +91,42 @@ describe('die_on_bad_params option', () => {
         tmpl.param('items', [{ name: 'a', value: '1' }]);
       }).not.toThrow();
 
-      // Loop variables are also valid parameter names
+      // Each loop body is its own namespace, so its names are not settable
+      // from the top level - the whole point of the check is to catch typos.
       expect(() => {
         tmpl.param('name', 'test');
-      }).not.toThrow();
+      }).toThrow(/Attempt to set nonexistent parameter/);
 
       expect(() => {
         tmpl.param('value', '123');
-      }).not.toThrow();
+      }).toThrow(/Attempt to set nonexistent parameter/);
 
-      // But truly nonexistent parameters should fail
       expect(() => {
         tmpl.param('nonexistent', 'test');
       }).toThrow(/Attempt to set nonexistent parameter/);
+    });
+
+    it('should accept names used inside a conditional at the same level', () => {
+      const tmpl = new HTMLTemplate({
+        scalarref: '<TMPL_IF NAME="cond"><TMPL_VAR NAME="inside"></TMPL_IF>'
+      });
+
+      // Conditionals do not open a namespace, so both names stay top-level.
+      expect(() => {
+        tmpl.param('cond', true);
+        tmpl.param('inside', 'v');
+      }).not.toThrow();
+    });
+
+    it('should accept loop-scoped names at the top level with global_vars', () => {
+      const tmpl = new HTMLTemplate({
+        scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="name"></TMPL_LOOP>',
+        global_vars: true
+      });
+
+      expect(() => {
+        tmpl.param('name', 'test');
+      }).not.toThrow();
     });
   });
 
@@ -262,27 +285,13 @@ describe('die_on_bad_params option', () => {
         ]);
       }).not.toThrow();
 
-      // All parameter names found in template are valid
-      expect(() => {
-        tmpl.param('outer_var', 'test');
-      }).not.toThrow();
-
-      expect(() => {
-        tmpl.param('inner_var', 'test');
-      }).not.toThrow();
-
-      expect(() => {
-        tmpl.param('has_inner', true);
-      }).not.toThrow();
-
-      expect(() => {
-        tmpl.param('inner', [{ inner_var: 'test' }]);
-      }).not.toThrow();
-
-      // But truly nonexistent parameters should fail
-      expect(() => {
-        tmpl.param('completely_unknown', 'test');
-      }).toThrow(/Attempt to set nonexistent parameter/);
+      // Everything else in this template lives inside the outer loop's
+      // namespace, so none of it is addressable from the top level.
+      for (const name of ['outer_var', 'inner_var', 'has_inner', 'inner', 'completely_unknown']) {
+        expect(() => {
+          tmpl.param(name, 'test');
+        }).toThrow(/Attempt to set nonexistent parameter/);
+      }
     });
   });
 });

@@ -3,6 +3,9 @@
  * Compares performance of common template operations
  */
 
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { bench, describe } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
@@ -165,24 +168,24 @@ describe('Template Compilation', () => {
 });
 
 describe('Cache Performance', () => {
+  // Caching only applies to file-backed templates, so this group needs a real
+  // file - passing `cache` alongside `scalarref` is rejected by the constructor.
+  const cacheDir = mkdtempSync(join(tmpdir(), 'html-template-bench-'));
+  const cacheFile = join(cacheDir, 'cached.tmpl');
+  writeFileSync(cacheFile, 'Hello <TMPL_VAR NAME="name">!');
+
   bench('Without cache - repeated parsing', () => {
     for (let i = 0; i < 10; i++) {
-      const tmpl = new HTMLTemplate({
-        scalarref: 'Hello <TMPL_VAR NAME="name">!',
-        cache: false
-      });
+      const tmpl = new HTMLTemplate({ filename: cacheFile, cache: false });
       tmpl.param('name', 'World');
       tmpl.output();
     }
   });
 
-  bench('With cache - same template', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: 'Hello <TMPL_VAR NAME="name">!',
-      cache: true
-    });
+  bench('With cache - repeated parsing', () => {
     for (let i = 0; i < 10; i++) {
-      tmpl.param('name', `World ${i}`);
+      const tmpl = new HTMLTemplate({ filename: cacheFile, cache: true });
+      tmpl.param('name', 'World');
       tmpl.output();
     }
   });
