@@ -397,7 +397,7 @@ export class HTMLTemplate {
     // a function has no stable identity, and its closure is invisible to
     // toString(). Two templates with the same filename and different filters
     // would otherwise collide, so filtered templates are not cached at all.
-    const cacheable = cacheManager.isEnabled() && this.options.filter.length === 0;
+    const cacheable = cacheManager.isEnabled() && asArray(this.options.filter).length === 0;
 
     if (cacheable) {
       const cached = cacheManager.get(cacheKey);

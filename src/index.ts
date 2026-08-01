@@ -1,14 +1,37 @@
 /**
  * node-perl-html-template
- * TypeScript/ESM port of Perl's HTML::Template module v2.98 core API and template syntax
+ * Perl HTML::Template's template syntax, with a TypeScript API
  *
  * @packageDocumentation
  * @module node-perl-html-template
  * @author libraz <libraz@libraz.net>
  */
 
-// Main class
+// Compilation and rendering
+export { compile, compileAsync, render } from './api/compile.js';
+export { Template } from './api/Template.js';
+export type {
+  AsyncCompileOptions,
+  CompileOptions,
+  IncludeOptions,
+  LegacyOptions,
+  OutputSink,
+  ParamInfo,
+  RenderOptions,
+  RowSource,
+  Scalar,
+  ScalarSource,
+  TemplateData,
+  TemplateShape
+} from './api/types.js';
+// Perl-compatible API
 export { HTMLTemplate } from './HTMLTemplate.js';
+export { TemplateNotFoundError } from './loader/errors.js';
+// Template sources
+export { memoryLoader } from './loader/memory.js';
+export { type NodeFileLoaderOptions, nodeFileLoader } from './loader/nodeFile.js';
+export type { ResolveRequest, SyncTemplateLoader, TemplateLoader, TemplateResource } from './loader/types.js';
+export type { ParamUsage } from './parser/shape.js';
 
 // Export public types
 export type {
@@ -23,7 +46,8 @@ export type {
   OutputOptions,
   ParamValue,
   QueryOptions,
-  QueryResult
+  QueryResult,
+  SourceLoc
 } from './types.js';
 
 // Version
