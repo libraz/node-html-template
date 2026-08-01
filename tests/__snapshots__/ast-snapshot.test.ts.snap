@@ -16,6 +16,10 @@ exports[`AST snapshots > conditionals 1`] = `
         "type": "TEXT",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "a",
     "type": "COND",
   },
@@ -33,6 +37,10 @@ exports[`AST snapshots > conditionals 1`] = `
         "type": "TEXT",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 2,
+    },
     "name": "b",
     "type": "COND",
   },
@@ -54,10 +62,18 @@ exports[`AST snapshots > conditionals 1`] = `
             "type": "TEXT",
           },
         ],
+        "loc": {
+          "col": 12,
+          "line": 3,
+        },
         "name": "b",
         "type": "COND",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 3,
+    },
     "name": "a",
     "type": "COND",
   },
@@ -69,6 +85,10 @@ exports[`AST snapshots > escape variants 1`] = `
   {
     "default": undefined,
     "escape": "html",
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "a",
     "type": "VAR",
   },
@@ -80,6 +100,10 @@ exports[`AST snapshots > escape variants 1`] = `
   {
     "default": undefined,
     "escape": "js",
+    "loc": {
+      "col": 1,
+      "line": 2,
+    },
     "name": "b",
     "type": "VAR",
   },
@@ -91,6 +115,10 @@ exports[`AST snapshots > escape variants 1`] = `
   {
     "default": undefined,
     "escape": "url",
+    "loc": {
+      "col": 1,
+      "line": 3,
+    },
     "name": "c",
     "type": "VAR",
   },
@@ -102,6 +130,10 @@ exports[`AST snapshots > escape variants 1`] = `
   {
     "default": undefined,
     "escape": "none",
+    "loc": {
+      "col": 1,
+      "line": 4,
+    },
     "name": "d",
     "type": "VAR",
   },
@@ -113,6 +145,10 @@ exports[`AST snapshots > escape variants 1`] = `
   {
     "default": undefined,
     "escape": "none",
+    "loc": {
+      "col": 1,
+      "line": 5,
+    },
     "name": "e",
     "type": "VAR",
   },
@@ -124,6 +160,10 @@ exports[`AST snapshots > escape variants 1`] = `
   {
     "default": undefined,
     "escape": "html",
+    "loc": {
+      "col": 1,
+      "line": 6,
+    },
     "name": "f",
     "type": "VAR",
   },
@@ -135,6 +175,10 @@ exports[`AST snapshots > escape variants 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 7,
+    },
     "name": "g",
     "type": "VAR",
   },
@@ -146,6 +190,10 @@ exports[`AST snapshots > html comment syntax 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "a",
     "type": "VAR",
   },
@@ -163,6 +211,10 @@ exports[`AST snapshots > html comment syntax 1`] = `
         "type": "TEXT",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 2,
+    },
     "name": "b",
     "type": "COND",
   },
@@ -176,10 +228,18 @@ exports[`AST snapshots > html comment syntax 1`] = `
       {
         "default": undefined,
         "escape": undefined,
+        "loc": {
+          "col": 28,
+          "line": 3,
+        },
         "name": "d",
         "type": "VAR",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 3,
+    },
     "name": "c",
     "type": "LOOP",
   },
@@ -199,12 +259,20 @@ exports[`AST snapshots > loop with context vars 1`] = `
             "type": "TEXT",
           },
         ],
+        "loc": {
+          "col": 18,
+          "line": 1,
+        },
         "name": "__first__",
         "type": "COND",
       },
       {
         "default": undefined,
         "escape": undefined,
+        "loc": {
+          "col": 48,
+          "line": 1,
+        },
         "name": "name",
         "type": "VAR",
       },
@@ -217,10 +285,18 @@ exports[`AST snapshots > loop with context vars 1`] = `
             "type": "TEXT",
           },
         ],
+        "loc": {
+          "col": 63,
+          "line": 1,
+        },
         "name": "__last__",
         "type": "COND",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "items",
     "type": "LOOP",
   },
@@ -239,6 +315,10 @@ exports[`AST snapshots > nested loops 1`] = `
       {
         "default": undefined,
         "escape": undefined,
+        "loc": {
+          "col": 3,
+          "line": 2,
+        },
         "name": "x",
         "type": "VAR",
       },
@@ -252,10 +332,18 @@ exports[`AST snapshots > nested loops 1`] = `
           {
             "default": undefined,
             "escape": undefined,
+            "loc": {
+              "col": 27,
+              "line": 3,
+            },
             "name": "y",
             "type": "VAR",
           },
         ],
+        "loc": {
+          "col": 3,
+          "line": 3,
+        },
         "name": "inner",
         "type": "LOOP",
       },
@@ -265,6 +353,10 @@ exports[`AST snapshots > nested loops 1`] = `
         "type": "TEXT",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "outer",
     "type": "LOOP",
   },
@@ -297,6 +389,10 @@ exports[`AST snapshots > unknown tag in lenient mode 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 27,
+      "line": 1,
+    },
     "name": "real",
     "type": "VAR",
   },
@@ -308,6 +404,10 @@ exports[`AST snapshots > vanguard percent vars 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "first",
     "type": "VAR",
   },
@@ -318,6 +418,10 @@ exports[`AST snapshots > vanguard percent vars 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 13,
+      "line": 1,
+    },
     "name": "second",
     "type": "VAR",
   },
@@ -328,6 +432,10 @@ exports[`AST snapshots > vanguard percent vars 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 42,
+      "line": 1,
+    },
     "name": "third",
     "type": "VAR",
   },
@@ -339,6 +447,10 @@ exports[`AST snapshots > variables and defaults 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "title",
     "type": "VAR",
   },
@@ -350,6 +462,10 @@ exports[`AST snapshots > variables and defaults 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 2,
+    },
     "name": "bare",
     "type": "VAR",
   },
@@ -361,6 +477,10 @@ exports[`AST snapshots > variables and defaults 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 3,
+    },
     "name": "unquoted",
     "type": "VAR",
   },
@@ -372,6 +492,10 @@ exports[`AST snapshots > variables and defaults 1`] = `
   {
     "default": "hello",
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 4,
+    },
     "name": "greeting",
     "type": "VAR",
   },
@@ -383,6 +507,10 @@ exports[`AST snapshots > variables and defaults 1`] = `
   {
     "default": "",
     "escape": undefined,
+    "loc": {
+      "col": 1,
+      "line": 5,
+    },
     "name": "blank",
     "type": "VAR",
   },
@@ -399,6 +527,10 @@ exports[`AST snapshots > whitespace around tags 1`] = `
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 3,
+      "line": 2,
+    },
     "name": "x",
     "type": "VAR",
   },
@@ -422,6 +554,10 @@ exports[`AST snapshots with includes > expands a loop body that pulls in an incl
       {
         "default": undefined,
         "escape": undefined,
+        "loc": {
+          "col": 26,
+          "line": 1,
+        },
         "name": "deep",
         "type": "VAR",
       },
@@ -430,6 +566,10 @@ exports[`AST snapshots with includes > expands a loop body that pulls in an incl
         "type": "TEXT",
       },
     ],
+    "loc": {
+      "col": 1,
+      "line": 1,
+    },
     "name": "rows",
     "type": "LOOP",
   },
@@ -445,6 +585,10 @@ exports[`AST snapshots with includes > expands three levels into a single flat t
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 5,
+      "line": 1,
+    },
     "name": "top",
     "type": "VAR",
   },
@@ -455,6 +599,10 @@ exports[`AST snapshots with includes > expands three levels into a single flat t
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 35,
+      "line": 1,
+    },
     "name": "mid",
     "type": "VAR",
   },
@@ -465,6 +613,10 @@ exports[`AST snapshots with includes > expands three levels into a single flat t
   {
     "default": undefined,
     "escape": undefined,
+    "loc": {
+      "col": 66,
+      "line": 1,
+    },
     "name": "deep",
     "type": "VAR",
   },

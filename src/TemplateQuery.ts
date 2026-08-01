@@ -2,29 +2,29 @@
  * Template introspection
  *
  * Backs `query()` and the no-argument form of `param()`. Every answer comes
- * from the parameter scope tree, so the names `param()` will accept and the
- * names `query()` reports can never disagree.
+ * from the shape tree, so the names `param()` will accept and the names
+ * `query()` reports can never disagree.
  *
  * @module TemplateQuery
  */
 
-import { type ParamScope, resolveScope, scopeNames } from './parser/ParamScope.js';
+import { createShapeNode, resolveShape, type ShapeNode, shapeKind, shapeNames } from './parser/shape.js';
 import type { ParamType, QueryOptions, QueryResult } from './types.js';
 import { createError } from './utils/helpers.js';
 
 /**
- * Read-only view over a template's parameter scope tree.
+ * Read-only view over a template's shape tree.
  */
 export class TemplateQuery {
-  private readonly root: ParamScope;
+  private readonly root: ShapeNode;
 
   private readonly caseSensitive: boolean;
 
   /**
-   * @param root - Root parameter scope
+   * @param root - Root shape node
    * @param caseSensitive - Whether parameter names keep their case
    */
-  constructor(root: ParamScope, caseSensitive: boolean) {
+  constructor(root: ShapeNode, caseSensitive: boolean) {
     this.root = root;
     this.caseSensitive = caseSensitive;
   }
@@ -39,7 +39,7 @@ export class TemplateQuery {
    * @returns Sorted parameter names
    */
   topLevelNames(): string[] {
-    return scopeNames(this.root);
+    return sorted(this.root);
   }
 
   /**
@@ -49,7 +49,7 @@ export class TemplateQuery {
    * @returns Declared type, or undefined when the name is not declared
    */
   topLevelType(name: string): ParamType | undefined {
-    return this.root.types.get(this.normalize(name));
+    return shapeKind(this.root, this.normalize(name));
   }
 
   /**
@@ -88,8 +88,8 @@ export class TemplateQuery {
     const target = path[path.length - 1];
     if (target === undefined) return undefined;
 
-    const scope = resolveScope(this.root, path.slice(0, -1));
-    return scope?.types.get(target);
+    const scope = resolveShape(this.root, path.slice(0, -1));
+    return scope ? shapeKind(scope, target) : undefined;
   }
 
   /**
@@ -107,8 +107,8 @@ export class TemplateQuery {
     const target = path[path.length - 1];
     if (target === undefined) return undefined;
 
-    const parent = resolveScope(this.root, path.slice(0, -1));
-    const type = parent?.types.get(target);
+    const parent = resolveShape(this.root, path.slice(0, -1));
+    const type = parent ? shapeKind(parent, target) : undefined;
 
     if (type === undefined) return undefined;
 
@@ -118,7 +118,7 @@ export class TemplateQuery {
       );
     }
 
-    return scopeNames(parent?.loops.get(target) ?? { types: new Map(), loops: new Map() });
+    return sorted(parent?.loops.get(target) ?? createShapeNode());
   }
 
   /**
@@ -140,4 +140,17 @@ export class TemplateQuery {
   private normalize(name: string): string {
     return this.caseSensitive ? name : name.toLowerCase();
   }
+}
+
+/**
+ * List a namespace's names the way Perl reports them.
+ *
+ * The shape tree preserves declaration order, but Perl hands back hash keys,
+ * so both `param()` and `query({loop})` sort.
+ *
+ * @param shape - Namespace to list
+ * @returns Sorted parameter names
+ */
+function sorted(shape: ShapeNode): string[] {
+  return shapeNames(shape).sort();
 }

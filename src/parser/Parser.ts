@@ -11,8 +11,21 @@
  * @module parser/Parser
  */
 
-import type { ParseNode, Token } from '../types.js';
+import type { ParseNode, SourceLoc, Token } from '../types.js';
 import { createError } from '../utils/helpers.js';
+
+/**
+ * Read the source position off a token.
+ *
+ * Only tag nodes carry a position; text nodes are far more numerous and
+ * nothing needs to point at them.
+ *
+ * @param token - Token the node is built from
+ * @returns Source position, or undefined when the tokenizer supplied none
+ */
+function locOf(token: Token): SourceLoc | undefined {
+  return token.line === undefined ? undefined : { line: token.line, col: token.col ?? 1 };
+}
 
 /**
  * Parser context for tracking parsing state
@@ -172,7 +185,8 @@ export class Parser {
       type: 'VAR',
       name: token.name ?? '',
       escape: token.escape,
-      default: token.default
+      default: token.default,
+      loc: locOf(token)
     };
   }
 
@@ -217,7 +231,8 @@ export class Parser {
         return {
           type: 'LOOP',
           name: loopName,
-          body
+          body,
+          loc: locOf(token)
         };
       }
 
@@ -298,7 +313,8 @@ export class Parser {
           name: conditionName,
           condition: conditionType,
           consequent,
-          alternate: alternate.length > 0 ? alternate : undefined
+          alternate: alternate.length > 0 ? alternate : undefined,
+          loc: locOf(token)
         };
       }
 

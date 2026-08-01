@@ -13,8 +13,8 @@ import { loadTemplateSource } from './loader/source.js';
 import { getGlobalOptions, normalizeOptions, setGlobalOptions } from './options.js';
 import { stripComments } from './parser/comments.js';
 import { processIncludes } from './parser/IncludeProcessor.js';
-import { buildParamScope, type ParamScope } from './parser/ParamScope.js';
 import { Parser } from './parser/Parser.js';
+import { buildShape, type ShapeNode, withGlobalVars } from './parser/shape.js';
 import { Tokenizer } from './parser/Tokenizer.js';
 import { Context } from './runtime/Context.js';
 import { Executor } from './runtime/Executor.js';
@@ -60,10 +60,16 @@ export class HTMLTemplate {
   /** Runtime parameter storage */
   private readonly context: Context;
 
-  /** Parameter namespaces declared by the template */
-  private readonly paramScope: ParamScope;
+  /**
+   * Parameter namespaces used for name resolution.
+   *
+   * The shape tree itself is built without global_vars hoisting so it always
+   * describes the template's real nesting; this is the derived lookup view,
+   * which mirrors nested variables into the root when the option is on.
+   */
+  private readonly lookupShape: ShapeNode;
 
-  /** Introspection over the template's parameter scopes */
+  /** Introspection over the template's declared parameters */
   private readonly introspection: TemplateQuery;
 
   /**
@@ -79,8 +85,9 @@ export class HTMLTemplate {
     const prepared = this.preprocess(source, filename);
 
     this.ast = this.parseTemplate(prepared.source, filename, prepared.mtimes);
-    this.paramScope = buildParamScope(this.ast, this.options.case_sensitive, this.options.global_vars);
-    this.introspection = new TemplateQuery(this.paramScope, this.options.case_sensitive);
+    const shape = buildShape(this.ast, this.options.case_sensitive);
+    this.lookupShape = this.options.global_vars ? withGlobalVars(shape) : shape;
+    this.introspection = new TemplateQuery(this.lookupShape, this.options.case_sensitive);
   }
 
   // ==========================================================================
@@ -130,7 +137,7 @@ export class HTMLTemplate {
     const executor = new Executor(
       this.context,
       { dieOnBadParams: this.options.die_on_bad_params, caseSensitive: this.options.case_sensitive },
-      this.paramScope
+      this.lookupShape
     );
     const html = executor.execute(this.ast);
 

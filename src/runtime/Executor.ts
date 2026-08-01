@@ -5,7 +5,7 @@
  * @module runtime/Executor
  */
 
-import type { ParamScope } from '../parser/ParamScope.js';
+import type { ShapeNode } from '../parser/shape.js';
 import type { CondNode, LoopDataItem, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
 import { fastJoin, normalizeParamName } from '../utils/helpers.js';
 import type { Context } from './Context.js';
@@ -31,14 +31,14 @@ export class Executor {
   private readonly options: ExecutorOptions;
 
   /** Parameter scope matching the block currently being rendered */
-  private scope: ParamScope | undefined;
+  private scope: ShapeNode | undefined;
 
   /**
    * @param context - Runtime context holding parameter values
    * @param options - Render-time settings
    * @param scope - Parameter scope of the template's top level
    */
-  constructor(context: Context, options: ExecutorOptions, scope?: ParamScope) {
+  constructor(context: Context, options: ExecutorOptions, scope?: ShapeNode) {
     this.context = context;
     this.options = options;
     this.scope = scope;
@@ -158,12 +158,12 @@ export class Executor {
    * @param iterationData - One iteration's parameters
    * @param loopScope - Parameter scope of the loop body
    */
-  private validateIteration(iterationData: LoopDataItem, loopScope: ParamScope | undefined): void {
+  private validateIteration(iterationData: LoopDataItem, loopScope: ShapeNode | undefined): void {
     if (!this.options.dieOnBadParams || !loopScope) return;
 
     for (const key of Object.keys(iterationData)) {
       const name = this.normalize(key);
-      if (loopScope.types.has(name)) continue;
+      if (loopScope.decls.has(name)) continue;
 
       throw new Error(
         `HTML::Template->output() : fatal error in loop output : HTML::Template : Attempt to set nonexistent parameter '${name}' - this parameter name doesn't match any declarations in the template file : (die_on_bad_params => 1)`

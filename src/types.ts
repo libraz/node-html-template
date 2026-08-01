@@ -663,6 +663,19 @@ export type ParseNodeType =
   | 'NOOP'; // No-op (jump target)
 
 /**
+ * Position of a tag in the template source.
+ *
+ * Lines and columns are 1-based. Positions refer to the source after include
+ * expansion, so a tag that came from an included file reports where it landed
+ * in the flattened text.
+ * @internal
+ */
+export interface SourceLoc {
+  line: number;
+  col: number;
+}
+
+/**
  * Base parse node
  * @internal
  */
@@ -698,6 +711,9 @@ export interface VarNode extends BaseParseNode {
    * DEFAULT attribute value, written verbatim when the parameter is unset.
    */
   default?: string;
+
+  /** Where the tag appeared, for diagnostics and type generation. */
+  loc?: SourceLoc;
 }
 
 /**
@@ -717,6 +733,9 @@ export interface LoopNode extends BaseParseNode {
   type: 'LOOP';
   name: string;
   body: ParseNode[]; // Loop body nodes (recursive structure)
+
+  /** Where the opening tag appeared, for diagnostics and type generation. */
+  loc?: SourceLoc;
 }
 
 /**
@@ -730,6 +749,9 @@ export interface CondNode extends BaseParseNode {
   condition: 'if' | 'unless';
   consequent: ParseNode[]; // Nodes when condition is true (recursive structure)
   alternate?: ParseNode[]; // Nodes when condition is false (recursive structure)
+
+  /** Where the opening tag appeared, for diagnostics and type generation. */
+  loc?: SourceLoc;
 }
 
 /**
