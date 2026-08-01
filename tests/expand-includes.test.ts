@@ -7,9 +7,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { type ExpandOptions, expandIncludes } from '../src/compile/expandIncludes.js';
+import { type ExpandOptions, expandIncludes, expandIncludesAsync } from '../src/compile/expandIncludes.js';
 import { memoryLoader } from '../src/loader/memory.js';
-import type { SyncTemplateLoader } from '../src/loader/types.js';
+import type { SyncTemplateLoader, TemplateLoader } from '../src/loader/types.js';
 
 /**
  * Build expansion settings over an in-memory set of templates.
@@ -182,5 +182,106 @@ describe('expandIncludes', () => {
 
     expect(result.text).toBe('plain text');
     expect(result.segments).toHaveLength(1);
+  });
+});
+
+/**
+ * Wrap a loader so every method answers with a promise.
+ *
+ * @param loader - Loader to wrap
+ * @param onRead - Called with the id whenever a read starts
+ * @returns Asynchronous loader
+ */
+function deferred(loader: SyncTemplateLoader, onRead?: (id: string) => void): TemplateLoader {
+  return {
+    sync: false,
+    resolve: async (request) => loader.resolve(request),
+    read: async (id) => {
+      onRead?.(id);
+      await Promise.resolve();
+      return loader.read(id);
+    },
+    version: async (id) => loader.version?.(id)
+  };
+}
+
+describe('expandIncludesAsync', () => {
+  const FIXTURES: Array<{ name: string; root: string; files: Record<string, string> }> = [
+    { name: 'no includes', root: 'plain', files: {} },
+    { name: 'single include', root: 'A<TMPL_INCLUDE NAME="c.tmpl">B', files: { 'c.tmpl': 'C' } },
+    {
+      name: 'three levels',
+      root: 'top <TMPL_INCLUDE NAME="mid.tmpl">',
+      files: { 'mid.tmpl': '(mid <TMPL_INCLUDE NAME="deep.tmpl">)', 'deep.tmpl': '[deep]' }
+    },
+    {
+      name: 'shared include',
+      root: '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl">',
+      files: { 'a.tmpl': '<TMPL_INCLUDE NAME="p.tmpl">', 'b.tmpl': '<TMPL_INCLUDE NAME="p.tmpl">', 'p.tmpl': 'x' }
+    },
+    {
+      name: 'include inside a loop',
+      root: '<TMPL_LOOP rows><TMPL_INCLUDE NAME="row.tmpl"></TMPL_LOOP>',
+      files: { 'row.tmpl': '<TMPL_VAR NAME="cell">' }
+    }
+  ];
+
+  // The point of the split is that only the reading pass differs; assembly is
+  // the same code, so the two entry points must agree exactly.
+  for (const fixture of FIXTURES) {
+    it(`matches the synchronous result: ${fixture.name}`, async () => {
+      const sync = expandIncludes(fixture.root, 'root.tmpl', options(fixture.files));
+      const async = await expandIncludesAsync(fixture.root, 'root.tmpl', {
+        ...options(fixture.files),
+        loader: deferred(memoryLoader(fixture.files))
+      });
+
+      expect(async.text).toBe(sync.text);
+      expect(async.segments).toEqual(sync.segments);
+      expect([...async.versions.keys()].sort()).toEqual([...sync.versions.keys()].sort());
+    });
+  }
+
+  it('reads each level concurrently rather than one template at a time', async () => {
+    const files = {
+      'a.tmpl': 'a',
+      'b.tmpl': 'b',
+      'c.tmpl': 'c'
+    };
+
+    let inFlight = 0;
+    let peak = 0;
+    const loader = deferred(memoryLoader(files), () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+    });
+
+    await expandIncludesAsync(
+      '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl"><TMPL_INCLUDE NAME="c.tmpl">',
+      'root.tmpl',
+      { ...options(files), loader }
+    );
+
+    expect(peak).toBe(3);
+  });
+
+  it('rejects a cycle', async () => {
+    const files = { 'a.tmpl': '<TMPL_INCLUDE NAME="b.tmpl">', 'b.tmpl': '<TMPL_INCLUDE NAME="a.tmpl">' };
+
+    await expect(
+      expandIncludesAsync('<TMPL_INCLUDE NAME="a.tmpl">', 'root.tmpl', {
+        ...options(files),
+        loader: deferred(memoryLoader(files))
+      })
+    ).rejects.toThrow(/likely recursive includes/);
+  });
+
+  it('drops a missing include when told to ignore it', async () => {
+    const result = await expandIncludesAsync('before<TMPL_INCLUDE NAME="absent.tmpl">after', 'root.tmpl', {
+      ...options({}, { onMissing: 'ignore' }),
+      loader: deferred(memoryLoader({}))
+    });
+
+    expect(result.text).toBe('beforeafter');
   });
 });

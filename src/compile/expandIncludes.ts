@@ -15,7 +15,7 @@
  */
 
 import { TemplateNotFoundError } from '../loader/errors.js';
-import type { SyncTemplateLoader } from '../loader/types.js';
+import type { SyncTemplateLoader, TemplateLoader } from '../loader/types.js';
 import { type IncludeRef, scanIncludes } from '../parser/scanIncludes.js';
 import { createError } from '../utils/helpers.js';
 
@@ -51,6 +51,14 @@ export interface ExpandOptions {
    * entry template already went through.
    */
   prepare(text: string): string;
+}
+
+/**
+ * Settings for {@link expandIncludesAsync}, which accepts a loader whose
+ * methods may return promises.
+ */
+export interface AsyncExpandOptions extends Omit<ExpandOptions, 'loader'> {
+  loader: TemplateLoader;
 }
 
 /**
@@ -111,6 +119,43 @@ export function expandIncludes(rootText: string, rootId: string | undefined, opt
 }
 
 /**
+ * Expand every include in a template, reading through an asynchronous loader.
+ *
+ * Each level of the include graph is resolved and read concurrently, so depth
+ * rather than template count bounds the wait. The assembly pass is the same
+ * pure code the synchronous entry point uses, so both produce identical text.
+ *
+ * @param rootText - Entry template text, already preprocessed
+ * @param rootId - Canonical id of the entry template, when it came from a loader
+ * @param options - Expansion settings
+ * @returns Flattened text with its provenance
+ * @throws Error on a cycle, on exceeding the depth limit, or on a missing
+ *   include when `onMissing` is `throw`
+ */
+export async function expandIncludesAsync(
+  rootText: string,
+  rootId: string | undefined,
+  options: AsyncExpandOptions
+): Promise<ExpandedSource> {
+  const id = rootId ?? '';
+  const units = await collectAsync(rootText, id, options);
+  const root = units.get(id);
+
+  if (!root) {
+    return { text: rootText, versions: new Map(), segments: [] };
+  }
+
+  const versions = new Map<string, string | undefined>();
+  for (const unit of units.values()) {
+    if (unit.id !== '') {
+      versions.set(unit.id, unit.id === id ? await options.loader.version?.(id) : unit.version);
+    }
+  }
+
+  return { ...assemble(root, units, options), versions };
+}
+
+/**
  * Read every template reachable from the entry point, breadth first.
  *
  * Each template is read at most once, so a header included from a dozen places
@@ -161,6 +206,71 @@ function collect(rootText: string, rootId: string, options: ExpandOptions): Map<
 }
 
 /**
+ * Read every reachable template, one graph level at a time.
+ *
+ * @param rootText - Entry template text
+ * @param rootId - Canonical id of the entry template
+ * @param options - Expansion settings
+ * @returns Every reachable template, keyed by id
+ */
+async function collectAsync(rootText: string, rootId: string, options: AsyncExpandOptions): Promise<Map<string, Unit>> {
+  const units = new Map<string, Unit>();
+  const root: Unit = { id: rootId, text: rootText, refs: scanIncludes(rootText), targets: new Map() };
+  units.set(rootId, root);
+
+  let level: Unit[] = [root];
+
+  while (level.length > 0) {
+    const pending: Array<{ unit: Unit; index: number; ref: IncludeRef }> = [];
+    for (const unit of level) {
+      for (const [index, ref] of unit.refs.entries()) {
+        pending.push({ unit, index, ref });
+      }
+    }
+
+    const targets = await Promise.all(pending.map(({ unit, ref }) => resolveRefAsync(ref, unit, options)));
+
+    const toRead: string[] = [];
+    const queued = new Set<string>();
+
+    for (const [position, targetId] of targets.entries()) {
+      const request = pending[position];
+      if (targetId === undefined || !request) continue;
+
+      request.unit.targets.set(request.index, targetId);
+      if (units.has(targetId) || queued.has(targetId)) continue;
+
+      queued.add(targetId);
+      toRead.push(targetId);
+    }
+
+    const resources = await Promise.all(toRead.map((id) => options.loader.read(id)));
+    const next: Unit[] = [];
+
+    for (const [position, resource] of resources.entries()) {
+      const id = toRead[position];
+      if (id === undefined) continue;
+
+      const text = options.prepare(resource.text);
+      const child: Unit = {
+        id,
+        text,
+        refs: scanIncludes(text),
+        targets: new Map(),
+        version: resource.version
+      };
+
+      units.set(id, child);
+      next.push(child);
+    }
+
+    level = next;
+  }
+
+  return units;
+}
+
+/**
  * Resolve one include reference.
  *
  * Only a genuinely missing template may be ignored. A malformed tag, an
@@ -174,17 +284,52 @@ function collect(rootText: string, rootId: string, options: ExpandOptions): Map<
  */
 function resolveRef(ref: IncludeRef, unit: Unit, options: ExpandOptions): string | undefined {
   try {
-    return options.loader.resolve({
-      name: ref.name,
-      from: unit.id === '' ? undefined : unit.id,
-      include: true
-    });
+    return options.loader.resolve(requestFor(ref, unit));
   } catch (error) {
-    if (error instanceof TemplateNotFoundError && options.onMissing === 'ignore') {
-      return undefined;
-    }
-    throw error;
+    return rethrowUnlessIgnorable(error, options);
   }
+}
+
+/**
+ * Resolve one include reference through an asynchronous loader.
+ *
+ * @param ref - Include reference
+ * @param unit - Template the reference appears in
+ * @param options - Expansion settings
+ * @returns Canonical id, or undefined when the template is missing and ignored
+ */
+async function resolveRefAsync(ref: IncludeRef, unit: Unit, options: AsyncExpandOptions): Promise<string | undefined> {
+  try {
+    return await options.loader.resolve(requestFor(ref, unit));
+  } catch (error) {
+    return rethrowUnlessIgnorable(error, options);
+  }
+}
+
+/**
+ * Build the resolve request for an include reference.
+ *
+ * @param ref - Include reference
+ * @param unit - Template the reference appears in
+ * @returns Resolve request
+ */
+function requestFor(ref: IncludeRef, unit: Unit): { name: string; from?: string; include: true } {
+  return { name: ref.name, from: unit.id === '' ? undefined : unit.id, include: true };
+}
+
+/**
+ * Decide whether a resolution failure may be ignored.
+ *
+ * @param error - Failure from the loader
+ * @param options - Expansion settings
+ * @returns undefined when the failure is an ignorable missing template
+ * @throws The original error otherwise
+ */
+function rethrowUnlessIgnorable(error: unknown, options: { onMissing: 'throw' | 'ignore' }): undefined {
+  if (error instanceof TemplateNotFoundError && options.onMissing === 'ignore') {
+    return undefined;
+  }
+  throw error;
 }
 
 /**
@@ -198,7 +343,7 @@ function resolveRef(ref: IncludeRef, unit: Unit, options: ExpandOptions): string
 function assemble(
   root: Unit,
   units: Map<string, Unit>,
-  options: ExpandOptions
+  options: Pick<ExpandOptions, 'maxDepth'>
 ): { text: string; segments: SourceSegment[] } {
   const parts: string[] = [];
   const segments: SourceSegment[] = [];
