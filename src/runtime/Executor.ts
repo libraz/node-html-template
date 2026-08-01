@@ -6,7 +6,7 @@
  */
 
 import type { ShapeNode } from '../parser/shape.js';
-import type { CondNode, LoopDataItem, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
+import type { CondNode, EscapeType, LoopDataItem, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
 import { fastJoin, normalizeParamName } from '../utils/helpers.js';
 import type { Context } from './Context.js';
 import { escapeValue } from './Escape.js';
@@ -20,6 +20,15 @@ export interface ExecutorOptions {
 
   /** Whether parameter names keep their case */
   caseSensitive: boolean;
+
+  /**
+   * Escape applied to variables whose tag carried no ESCAPE attribute.
+   *
+   * Resolved here rather than burned into the parse tree, so one compiled
+   * template can serve callers with different escaping policies and the tree
+   * stays free of render-time decisions.
+   */
+  defaultEscape: EscapeType;
 }
 
 /**
@@ -109,7 +118,11 @@ export class Executor {
       return node.default ?? '';
     }
 
-    return node.escape === undefined ? value : escapeValue(value, node.escape);
+    // An absent ESCAPE attribute leaves `escape` undefined, which is what lets
+    // the default apply here without overriding an explicit ESCAPE=NONE.
+    const escape = node.escape ?? this.options.defaultEscape;
+
+    return escape === 'none' ? value : escapeValue(value, escape);
   }
 
   /**

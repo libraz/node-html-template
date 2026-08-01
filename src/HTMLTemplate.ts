@@ -13,7 +13,7 @@ import { expandIncludes } from './compile/expandIncludes.js';
 import { nodeFileLoader } from './loader/nodeFile.js';
 import { loadTemplateSource } from './loader/source.js';
 import type { SyncTemplateLoader } from './loader/types.js';
-import { getGlobalOptions, normalizeOptions, setGlobalOptions } from './options.js';
+import { asArray, getGlobalOptions, normalizeOptions, setGlobalOptions } from './options.js';
 import { stripComments } from './parser/comments.js';
 import { Parser } from './parser/Parser.js';
 import { buildShape, type ShapeNode, withGlobalVars } from './parser/shape.js';
@@ -23,7 +23,6 @@ import { Executor } from './runtime/Executor.js';
 import { TemplateQuery } from './TemplateQuery.js';
 import type {
   AssociateObject,
-  EscapeType,
   HTMLTemplateOptions,
   OutputOptions,
   ParamValue,
@@ -83,7 +82,12 @@ export class HTMLTemplate {
    */
   constructor(options: HTMLTemplateOptions) {
     this.options = normalizeOptions(options);
-    this.context = new Context(this.options);
+    this.context = new Context({
+      caseSensitive: this.options.case_sensitive,
+      globalVars: this.options.global_vars,
+      loopContextVars: this.options.loop_context_vars,
+      associates: this.options.associate ? asArray(this.options.associate) : []
+    });
     this.loader = nodeFileLoader({
       paths: this.options.path,
       searchAllPaths: this.options.search_path_on_include,
@@ -145,7 +149,11 @@ export class HTMLTemplate {
   output(options?: OutputOptions): string | undefined {
     const executor = new Executor(
       this.context,
-      { dieOnBadParams: this.options.die_on_bad_params, caseSensitive: this.options.case_sensitive },
+      {
+        dieOnBadParams: this.options.die_on_bad_params,
+        caseSensitive: this.options.case_sensitive,
+        defaultEscape: this.options.default_escape
+      },
       this.lookupShape
     );
     const html = executor.execute(this.ast);
@@ -385,7 +393,13 @@ export class HTMLTemplate {
     const cacheManager = new CacheManager(this.options);
     const cacheKey = CacheManager.generateKey(this.cacheIdentifier(filename, source));
 
-    if (cacheManager.isEnabled()) {
+    // A filter rewrites the source before parsing but cannot be identified:
+    // a function has no stable identity, and its closure is invisible to
+    // toString(). Two templates with the same filename and different filters
+    // would otherwise collide, so filtered templates are not cached at all.
+    const cacheable = cacheManager.isEnabled() && this.options.filter.length === 0;
+
+    if (cacheable) {
       const cached = cacheManager.get(cacheKey);
       if (cached) {
         this.logCache('HIT', filename);
@@ -401,13 +415,9 @@ export class HTMLTemplate {
       this.options.strict
     ).tokenize();
 
-    let ast = new Parser(tokens, filename, this.options.no_includes).parse();
+    const ast = new Parser(tokens, filename, this.options.no_includes).parse();
 
-    if (this.options.default_escape !== 'none') {
-      ast = HTMLTemplate.applyDefaultEscape(ast, this.options.default_escape);
-    }
-
-    if (cacheManager.isEnabled() && filename) {
+    if (cacheable && filename) {
       if (!versions.has(filename)) {
         versions.set(filename, this.loader.version?.(filename));
       }
@@ -418,39 +428,12 @@ export class HTMLTemplate {
   }
 
   /**
-   * Apply `default_escape` to every variable that carries no ESCAPE attribute.
-   *
-   * An explicit `ESCAPE=NONE` records the escape type, so it survives here and
-   * suppresses the default exactly as it does in Perl.
-   *
-   * @param nodes - Parsed nodes
-   * @param defaultEscape - Escape type to apply
-   * @returns Nodes with the default applied
-   */
-  private static applyDefaultEscape(nodes: ParseNode[], defaultEscape: EscapeType): ParseNode[] {
-    return nodes.map((node) => {
-      switch (node.type) {
-        case 'VAR':
-          return node.escape === undefined ? { ...node, escape: defaultEscape } : node;
-        case 'LOOP':
-          return { ...node, body: HTMLTemplate.applyDefaultEscape(node.body, defaultEscape) };
-        case 'COND':
-          return {
-            ...node,
-            consequent: HTMLTemplate.applyDefaultEscape(node.consequent, defaultEscape),
-            alternate: node.alternate ? HTMLTemplate.applyDefaultEscape(node.alternate, defaultEscape) : undefined
-          };
-        default:
-          return node;
-      }
-    });
-  }
-
-  /**
    * Build the cache identity for this template.
    *
-   * Every option that changes the parse result has to appear here, otherwise
-   * two templates that differ only in options would share a cache entry.
+   * What is cached is the parse tree, so only options that change it belong
+   * here. `default_escape`, `case_sensitive`, `global_vars` and
+   * `loop_context_vars` are all resolved after parsing and are deliberately
+   * absent, which lets templates differing only in those share one entry.
    *
    * @param filename - Path the template came from, if any
    * @param source - Prepared template text
@@ -461,11 +444,10 @@ export class HTMLTemplate {
       template: filename ?? source,
       path: this.options.path,
       search_path_on_include: this.options.search_path_on_include,
-      case_sensitive: this.options.case_sensitive,
-      loop_context_vars: this.options.loop_context_vars,
-      global_vars: this.options.global_vars,
       open_mode: this.options.open_mode,
-      default_escape: this.options.default_escape,
+      utf8: this.options.utf8,
+      max_includes: this.options.max_includes,
+      die_on_missing_include: this.options.die_on_missing_include,
       vanguard_compatibility_mode: this.options.vanguard_compatibility_mode,
       strict: this.options.strict,
       no_includes: this.options.no_includes

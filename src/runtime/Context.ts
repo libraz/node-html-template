@@ -12,9 +12,29 @@
  * @module runtime/Context
  */
 
-import type { AssociateObject, HTMLTemplateOptions, LoopDataItem, ParamValue } from '../types.js';
+import type { AssociateObject, LoopDataItem, ParamValue } from '../types.js';
 import { isTruthy, normalizeParamName } from '../utils/helpers.js';
 import { getFinalLoopData, getFinalValue } from '../utils/LazyValue.js';
+
+/**
+ * Settings a context needs to resolve names.
+ *
+ * Deliberately narrower than the full option set: name resolution depends on
+ * these four things and nothing else.
+ */
+export interface ContextOptions {
+  /** Whether parameter names keep their case */
+  caseSensitive: boolean;
+
+  /** Whether a name unresolved in a loop falls back to enclosing scopes */
+  globalVars: boolean;
+
+  /** Whether loop iterations get __first__ and friends */
+  loopContextVars: boolean;
+
+  /** Objects consulted for names the caller never set */
+  associates?: readonly AssociateObject[];
+}
 
 /**
  * Parameter scope
@@ -49,9 +69,9 @@ export class Context {
   private currentScope: Scope;
 
   /**
-   * Template options
+   * Name resolution settings
    */
-  private options: HTMLTemplateOptions;
+  private options: ContextOptions;
 
   /**
    * Associate objects for parameter lookup
@@ -61,19 +81,13 @@ export class Context {
   /**
    * Create execution context
    *
-   * @param options - Template options
+   * @param options - Name resolution settings
    */
-  constructor(options: HTMLTemplateOptions) {
+  constructor(options: ContextOptions) {
     this.options = options;
     this.rootScope = { params: new Map() };
     this.currentScope = this.rootScope;
-
-    // Initialize associate objects
-    if (options.associate) {
-      this.associates = Array.isArray(options.associate) ? options.associate : [options.associate];
-    } else {
-      this.associates = [];
-    }
+    this.associates = [...(options.associates ?? [])];
   }
 
   /**
@@ -83,7 +97,7 @@ export class Context {
    * @param value - Parameter value
    */
   setParam(name: string, value: ParamValue): void {
-    const normalizedName = normalizeParamName(name, this.options.case_sensitive ?? false);
+    const normalizedName = normalizeParamName(name, this.options.caseSensitive);
     this.rootScope.params.set(normalizedName, value);
   }
 
@@ -95,7 +109,7 @@ export class Context {
    * @returns Parameter value or undefined if not found
    */
   getParam(name: string): ParamValue | undefined {
-    const normalizedName = normalizeParamName(name, this.options.case_sensitive ?? false);
+    const normalizedName = normalizeParamName(name, this.options.caseSensitive);
 
     // Search current scope
     if (this.currentScope.params.has(normalizedName)) {
@@ -103,7 +117,7 @@ export class Context {
     }
 
     // If global_vars enabled, search parent scopes
-    if (this.options.global_vars) {
+    if (this.options.globalVars) {
       let scope = this.currentScope.parent;
       while (scope) {
         if (scope.params.has(normalizedName)) {
@@ -136,7 +150,7 @@ export class Context {
       if (!associate) continue;
 
       let associateName = name;
-      if (!this.options.case_sensitive) {
+      if (!this.options.caseSensitive) {
         const associateParamNames = associate.param();
         if (Array.isArray(associateParamNames)) {
           const matchedName = associateParamNames.find(
@@ -246,14 +260,14 @@ export class Context {
     };
 
     // Add loop iteration parameters
-    const caseSensitive = this.options.case_sensitive ?? false;
+    const caseSensitive = this.options.caseSensitive;
     Object.entries(params).forEach(([key, value]) => {
       const normalizedKey = normalizeParamName(key, caseSensitive);
       newScope.params.set(normalizedKey, value);
     });
 
     // Add loop context variables if enabled
-    if (this.options.loop_context_vars) {
+    if (this.options.loopContextVars) {
       this.addLoopContextVars(newScope, loopIndex, loopLength);
     }
 
@@ -281,7 +295,7 @@ export class Context {
    * @param length - Total loop length
    */
   private addLoopContextVars(scope: Scope, index: number, length: number): void {
-    const caseSensitive = this.options.case_sensitive ?? false;
+    const caseSensitive = this.options.caseSensitive;
 
     // Loop context variables are always spelled in lowercase in templates, but
     // they still go through name normalization so case_sensitive mode matches.
