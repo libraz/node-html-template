@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TemplateNotFoundError } from '../src/loader/errors.js';
 import { memoryLoader } from '../src/loader/memory.js';
 import { nodeFileLoader } from '../src/loader/nodeFile.js';
+import { normalizeEncodingName, parseOpenMode } from '../src/utils/encoding.js';
 
 describe('nodeFileLoader', () => {
   let dir: string;
@@ -81,6 +82,18 @@ describe('nodeFileLoader', () => {
     const loader = nodeFileLoader({ paths: [dir] });
 
     expect(() => loader.resolve({ name: 'absent.tmpl', include: true })).toThrow(TemplateNotFoundError);
+  });
+
+  it('reports a missing absolute name as TemplateNotFoundError without searching', () => {
+    const loader = nodeFileLoader({ paths: [dir] });
+
+    expect(() => loader.resolve({ name: join(dir, 'absent.tmpl'), include: false })).toThrow(TemplateNotFoundError);
+  });
+
+  it('has no version for a path it cannot stat', () => {
+    const loader = nodeFileLoader({ paths: [dir] });
+
+    expect(loader.version?.(join(dir, 'absent.tmpl'))).toBeUndefined();
   });
 
   it('ignores a directory that shares the template name', () => {
@@ -177,6 +190,12 @@ describe('memoryLoader', () => {
     expect(() => loader.resolve({ name: 'absent.tmpl', include: true })).toThrow(TemplateNotFoundError);
   });
 
+  it('reports an unknown id the same way when read directly', () => {
+    const loader = memoryLoader({ 'page.tmpl': 'page' });
+
+    expect(() => loader.read('absent.tmpl')).toThrow(TemplateNotFoundError);
+  });
+
   it('accepts a Map and copies it, so later writes do not leak in', () => {
     const files = new Map([['page.tmpl', 'original']]);
     const loader = memoryLoader(files);
@@ -193,5 +212,41 @@ describe('memoryLoader', () => {
 
     expect(loader.version?.('page.tmpl')).toBeUndefined();
     expect(loader.read('page.tmpl').version).toBeUndefined();
+  });
+});
+
+describe('encoding names', () => {
+  it('reads a Perl open_mode layer', () => {
+    expect(parseOpenMode('<:encoding(utf8)')).toBe('utf-8');
+    expect(parseOpenMode('<:encoding(iso-8859-1)')).toBe('latin1');
+  });
+
+  it('reads a raw layer as the byte-preserving encoding', () => {
+    expect(parseOpenMode(':raw')).toBe('latin1');
+    expect(parseOpenMode('<:raw')).toBe('latin1');
+  });
+
+  it('accepts a bare Node encoding name', () => {
+    expect(parseOpenMode('utf-16le')).toBe('utf-16le');
+    expect(parseOpenMode('base64url')).toBe('base64url');
+  });
+
+  it('accepts a name however it is spelled', () => {
+    expect(normalizeEncodingName('UTF8')).toBe('utf-8');
+    expect(normalizeEncodingName('utf-8')).toBe('utf-8');
+    expect(normalizeEncodingName('utf_8')).toBe('utf-8');
+    expect(normalizeEncodingName('ISO-8859-1')).toBe('latin1');
+    expect(normalizeEncodingName('ucs2')).toBe('utf-16le');
+    expect(normalizeEncodingName('hex')).toBe('hex');
+  });
+
+  it('reads UTF-16 as little-endian, which is the only one Node decodes', () => {
+    expect(normalizeEncodingName('utf16')).toBe('utf-16le');
+    expect(normalizeEncodingName('utf16be')).toBe('utf-16le');
+  });
+
+  it('falls back to UTF-8 for a name it does not know', () => {
+    expect(normalizeEncodingName('no-such-encoding')).toBe('utf-8');
+    expect(parseOpenMode('<:encoding(no-such-encoding)')).toBe('utf-8');
   });
 });

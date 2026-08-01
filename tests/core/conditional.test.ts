@@ -36,6 +36,15 @@ describe('TMPL_IF truthiness', () => {
   it('treats the string "0" as false, as Perl does', () => {
     expect(branch('0')).toBe('');
   });
+
+  it('treats an empty list as false and a populated one as true', () => {
+    expect(branch([])).toBe('');
+    expect(branch([{ n: 1 }])).toBe('yes');
+  });
+
+  it('treats null as false', () => {
+    expect(branch(null)).toBe('');
+  });
 });
 
 describe('TMPL_ELSE', () => {
