@@ -1,220 +1,158 @@
 /**
- * Basic template benchmarks
- * Compares performance of common template operations
+ * Template benchmarks
+ *
+ * Split along the line that matters for this library: what compiling costs,
+ * and what rendering an already-compiled template costs. Anything reported
+ * under "render" reuses one compiled template, which is how it is meant to be
+ * used in a server.
  */
 
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { bench, describe } from 'vitest';
-import { HTMLTemplate } from '../src/index.js';
+import { compile, memoryLoader, render } from '../src/index.js';
 
-describe('Basic Operations', () => {
-  bench('Simple variable substitution', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: 'Hello <TMPL_VAR NAME="name">!'
-    });
-    tmpl.param('name', 'World');
-    tmpl.output();
-  });
-
-  bench('Multiple variables', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '<TMPL_VAR NAME="a"> <TMPL_VAR NAME="b"> <TMPL_VAR NAME="c">'
-    });
-    tmpl.param({ a: '1', b: '2', c: '3' });
-    tmpl.output();
-  });
-
-  bench('Simple loop (10 items)', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="item"></TMPL_LOOP>'
-    });
-    const items = Array.from({ length: 10 }, (_, i) => ({ item: `Item ${i}` }));
-    tmpl.param('items', items);
-    tmpl.output();
-  });
-
-  bench('Simple loop (100 items)', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="item"></TMPL_LOOP>'
-    });
-    const items = Array.from({ length: 100 }, (_, i) => ({ item: `Item ${i}` }));
-    tmpl.param('items', items);
-    tmpl.output();
-  });
-
-  bench('Nested loops (10x10)', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: `
-        <TMPL_LOOP NAME="outer">
-          <TMPL_LOOP NAME="inner">
-            <TMPL_VAR NAME="value">
+const SIMPLE = 'Hello <TMPL_VAR NAME="name">!';
+const COMPLEX = `
+  <html>
+    <head><title><TMPL_VAR NAME="title"></title></head>
+    <body>
+      <h1><TMPL_VAR NAME="heading"></h1>
+      <TMPL_IF NAME="show_content">
+        <div>
+          <TMPL_LOOP NAME="items">
+            <p><TMPL_VAR NAME="item_name">: <TMPL_VAR NAME="item_value"></p>
           </TMPL_LOOP>
-        </TMPL_LOOP>
-      `
-    });
-    const data = Array.from({ length: 10 }, (_, i) => ({
-      inner: Array.from({ length: 10 }, (__, j) => ({
-        value: `${i}-${j}`
-      }))
-    }));
-    tmpl.param('outer', data);
-    tmpl.output();
+        </div>
+      </TMPL_IF>
+    </body>
+  </html>
+`;
+
+const COMPLEX_DATA = {
+  title: 'Test',
+  heading: 'Test Page',
+  show_content: true,
+  items: [
+    { item_name: 'Item 1', item_value: 'Value 1' },
+    { item_name: 'Item 2', item_value: 'Value 2' },
+    { item_name: 'Item 3', item_value: 'Value 3' }
+  ]
+};
+
+describe('compile', () => {
+  bench('simple template', () => {
+    void compile(SIMPLE);
   });
 
-  bench('Conditionals (IF/UNLESS)', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: `
-        <TMPL_IF NAME="show">
-          <TMPL_VAR NAME="content">
-        </TMPL_IF>
-        <TMPL_UNLESS NAME="hide">
-          <TMPL_VAR NAME="footer">
-        </TMPL_UNLESS>
-      `
+  bench('complex template', () => {
+    void compile(COMPLEX);
+  });
+
+  bench('template with three includes', () => {
+    void compile('<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl">', {
+      loader: memoryLoader({
+        'a.tmpl': '<TMPL_VAR NAME="a"><TMPL_INCLUDE NAME="c.tmpl">',
+        'b.tmpl': '<TMPL_VAR NAME="b">',
+        'c.tmpl': '<TMPL_VAR NAME="c">'
+      })
     });
-    tmpl.param({
-      show: true,
-      hide: false,
-      content: 'Content',
-      footer: 'Footer'
-    });
-    tmpl.output();
   });
 });
 
-describe('Escaping', () => {
-  bench('HTML escaping', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '<TMPL_VAR NAME="html" ESCAPE="HTML">'
-    });
-    tmpl.param('html', '<script>alert("XSS")</script>');
-    tmpl.output();
+describe('render', () => {
+  const simple = compile(SIMPLE);
+  const complex = compile(COMPLEX);
+  const loop = compile('<TMPL_LOOP NAME="items"><TMPL_VAR NAME="item"></TMPL_LOOP>');
+  const nested = compile(
+    '<TMPL_LOOP NAME="outer"><TMPL_LOOP NAME="inner"><TMPL_VAR NAME="value"></TMPL_LOOP></TMPL_LOOP>'
+  );
+  const conditionals = compile(
+    '<TMPL_IF NAME="show"><TMPL_VAR NAME="content"></TMPL_IF><TMPL_UNLESS NAME="hide"><TMPL_VAR NAME="footer"></TMPL_UNLESS>'
+  );
+
+  const rows = Array.from({ length: 100 }, (_, i) => ({ item: `Item ${i}` }));
+  const grid = Array.from({ length: 10 }, (_, i) => ({
+    inner: Array.from({ length: 10 }, (__, j) => ({ value: `${i}-${j}` }))
+  }));
+
+  bench('simple template', () => {
+    simple.render({ name: 'World' });
   });
 
-  bench('URL escaping', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '<a href="?q=<TMPL_VAR NAME="query" ESCAPE="URL">">Link</a>'
-    });
-    tmpl.param('query', 'hello world & stuff');
-    tmpl.output();
+  bench('complex template', () => {
+    complex.render(COMPLEX_DATA);
   });
 
-  bench('JavaScript escaping', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '<script>var x = "<TMPL_VAR NAME="data" ESCAPE="JS">";</script>'
-    });
-    tmpl.param('data', 'Some "quoted" string');
-    tmpl.output();
+  bench('loop, 10 rows', () => {
+    loop.render({ items: rows.slice(0, 10) });
   });
 
-  bench('default_escape option', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '<TMPL_VAR NAME="html">',
-      default_escape: 'html'
-    });
-    tmpl.param('html', '<script>alert("XSS")</script>');
-    tmpl.output();
-  });
-});
-
-describe('Template Compilation', () => {
-  const simpleTemplate = 'Hello <TMPL_VAR NAME="name">!';
-  const complexTemplate = `
-    <html>
-      <head><title><TMPL_VAR NAME="title"></title></head>
-      <body>
-        <h1><TMPL_VAR NAME="heading"></h1>
-        <TMPL_IF NAME="show_content">
-          <div>
-            <TMPL_LOOP NAME="items">
-              <p><TMPL_VAR NAME="item_name">: <TMPL_VAR NAME="item_value"></p>
-            </TMPL_LOOP>
-          </div>
-        </TMPL_IF>
-      </body>
-    </html>
-  `;
-
-  bench('Parse simple template', () => {
-    void new HTMLTemplate({ scalarref: simpleTemplate });
+  bench('loop, 100 rows', () => {
+    loop.render({ items: rows });
   });
 
-  bench('Parse complex template', () => {
-    void new HTMLTemplate({ scalarref: complexTemplate });
+  bench('nested loops, 10x10', () => {
+    nested.render({ outer: grid });
   });
 
-  bench('Parse and execute simple template', () => {
-    const tmpl = new HTMLTemplate({ scalarref: simpleTemplate });
-    tmpl.param('name', 'World');
-    tmpl.output();
-  });
-
-  bench('Parse and execute complex template', () => {
-    const tmpl = new HTMLTemplate({ scalarref: complexTemplate });
-    tmpl.param({
-      title: 'Test',
-      heading: 'Test Page',
-      show_content: true,
-      items: [
-        { item_name: 'Item 1', item_value: 'Value 1' },
-        { item_name: 'Item 2', item_value: 'Value 2' },
-        { item_name: 'Item 3', item_value: 'Value 3' }
-      ]
-    });
-    tmpl.output();
+  bench('conditionals', () => {
+    conditionals.render({ show: true, hide: false, content: 'Content', footer: 'Footer' });
   });
 });
 
-describe('Cache Performance', () => {
-  // Caching only applies to file-backed templates, so this group needs a real
-  // file - passing `cache` alongside `scalarref` is rejected by the constructor.
-  const cacheDir = mkdtempSync(join(tmpdir(), 'html-template-bench-'));
-  const cacheFile = join(cacheDir, 'cached.tmpl');
-  writeFileSync(cacheFile, 'Hello <TMPL_VAR NAME="name">!');
+describe('escaping', () => {
+  const html = compile('<TMPL_VAR NAME="v" ESCAPE="HTML">');
+  const url = compile('<a href="?q=<TMPL_VAR NAME="v" ESCAPE="URL">">Link</a>');
+  const js = compile('<script>var x = "<TMPL_VAR NAME="v" ESCAPE="JS">";</script>');
+  const unescaped = compile('<TMPL_VAR NAME="v">', { defaultEscape: 'none' });
 
-  bench('Without cache - repeated parsing', () => {
-    for (let i = 0; i < 10; i++) {
-      const tmpl = new HTMLTemplate({ filename: cacheFile, cache: false });
-      tmpl.param('name', 'World');
-      tmpl.output();
+  bench('html', () => {
+    html.render({ v: '<script>alert("XSS")</script>' });
+  });
+
+  bench('url', () => {
+    url.render({ v: 'hello world & stuff' });
+  });
+
+  bench('js', () => {
+    js.render({ v: 'Some "quoted" string' });
+  });
+
+  bench('none', () => {
+    unescaped.render({ v: '<script>alert("XSS")</script>' });
+  });
+});
+
+describe('compile per render', () => {
+  // The cost the compile/render split exists to remove: rendering the same
+  // template ten times without keeping the compiled form.
+  bench('render() ten times', () => {
+    for (let i = 0; i < 10; i += 1) {
+      render(SIMPLE, { name: 'World' });
     }
   });
 
-  bench('With cache - repeated parsing', () => {
-    for (let i = 0; i < 10; i++) {
-      const tmpl = new HTMLTemplate({ filename: cacheFile, cache: true });
-      tmpl.param('name', 'World');
-      tmpl.output();
+  bench('compile once, render ten times', () => {
+    const template = compile(SIMPLE);
+    for (let i = 0; i < 10; i += 1) {
+      template.render({ name: 'World' });
     }
   });
 });
 
-describe('Vanguard Syntax', () => {
-  bench('Standard TMPL_VAR syntax', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: 'Hello <TMPL_VAR NAME="name">!'
-    });
-    tmpl.param('name', 'World');
-    tmpl.output();
+describe('percent variables', () => {
+  const tags = compile('Hello <TMPL_VAR NAME="name">!');
+  const percent = compile('Hello %name%!', { legacy: { percentVars: true } });
+  const mixed = compile('%greeting% <TMPL_VAR NAME="name">!', { legacy: { percentVars: true } });
+
+  bench('TMPL_VAR only', () => {
+    tags.render({ name: 'World' });
   });
 
-  bench('Vanguard %VAR% syntax', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: 'Hello %name%!',
-      vanguard_compatibility_mode: true
-    });
-    tmpl.param('name', 'World');
-    tmpl.output();
+  bench('%VAR% only', () => {
+    percent.render({ name: 'World' });
   });
 
-  bench('Mixed syntax', () => {
-    const tmpl = new HTMLTemplate({
-      scalarref: '%greeting% <TMPL_VAR NAME="name">!',
-      vanguard_compatibility_mode: true
-    });
-    tmpl.param({ greeting: 'Hello', name: 'World' });
-    tmpl.output();
+  bench('both forms', () => {
+    mixed.render({ greeting: 'Hello', name: 'World' });
   });
 });
