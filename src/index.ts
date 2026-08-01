@@ -1,9 +1,9 @@
 /**
- * node-perl-html-template
+ * @libraz/html-template
  * Perl HTML::Template's template syntax, with a TypeScript API
  *
  * @packageDocumentation
- * @module node-perl-html-template
+ * @module @libraz/html-template
  * @author libraz <libraz@libraz.net>
  */
 

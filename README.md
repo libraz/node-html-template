@@ -1,9 +1,10 @@
 # @libraz/html-template
 
-[![CI](https://github.com/libraz/node-perl-html-template/actions/workflows/ci.yml/badge.svg)](https://github.com/libraz/node-perl-html-template/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@libraz/html-template.svg)](https://www.npmjs.com/package/@libraz/html-template)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
+[![CI](https://img.shields.io/github/actions/workflow/status/libraz/node-html-template/ci.yml?branch=main&label=CI)](https://github.com/libraz/node-html-template/actions)
+[![npm](https://img.shields.io/npm/v/@libraz/html-template)](https://www.npmjs.com/package/@libraz/html-template)
+[![codecov](https://codecov.io/gh/libraz/node-html-template/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/node-html-template)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/libraz/node-html-template/blob/main/LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript)](https://www.typescriptlang.org/)
 
 Perl HTML::Template's template syntax, with a TypeScript API.
 

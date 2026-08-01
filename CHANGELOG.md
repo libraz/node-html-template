@@ -51,3 +51,5 @@ Each is one option away from the Perl behaviour:
 - Variables are HTML-escaped unless a tag says otherwise (`defaultEscape`)
 - Parameter names are matched case-sensitively (`caseSensitive`)
 - Data keys the template does not declare are ignored (`strictData`)
+
+[1.0.0]: https://github.com/libraz/node-html-template/releases/tag/v1.0.0
