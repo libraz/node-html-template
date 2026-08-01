@@ -10,7 +10,8 @@
  */
 
 import { declKind, type ShapeNode } from '../parser/shape.js';
-import { Executor } from '../runtime/Executor.js';
+import { renderChunks } from '../runtime/chunks.js';
+import { Executor, type ExecutorOptions, StringSink } from '../runtime/Executor.js';
 import { RenderState } from '../runtime/RenderState.js';
 import type { EscapeType, ParamValue, ParseNode } from '../types.js';
 import { createError } from '../utils/helpers.js';
@@ -87,24 +88,54 @@ export class Template<T extends TemplateData = TemplateData> {
    * @returns Rendered text
    */
   render(data: T, options: RenderOptions = {}): string {
-    const executor = new Executor(this.prepare(data, options), {
-      strictData: options.strictData ?? false,
-      caseSensitive: this.compiled.caseSensitive,
-      defaultEscape: this.compiled.defaultEscape
-    });
+    const sink = new StringSink();
+    this.renderTo(sink, data, options);
 
-    return executor.execute(this.compiled.nodes);
+    return sink.toString();
   }
 
   /**
    * Render the template into a sink.
+   *
+   * Output reaches the sink as it is produced, so nothing has to be held in
+   * memory that the destination has already accepted.
    *
    * @param sink - Destination for the output
    * @param data - Values for the template's parameters
    * @param options - Settings for this render
    */
   renderTo(sink: OutputSink, data: T, options: RenderOptions = {}): void {
-    sink.write(this.render(data, options));
+    const executor = new Executor(this.prepare(data, options), this.executorOptions(options), sink);
+
+    executor.execute(this.compiled.nodes);
+  }
+
+  /**
+   * Render the template one chunk at a time.
+   *
+   * Nothing is computed until a chunk is asked for, so a consumer that stops
+   * early stops the work with it.
+   *
+   * @param data - Values for the template's parameters
+   * @param options - Settings for this render
+   * @returns Iterator over the pieces of the output, in order
+   */
+  renderChunks(data: T, options: RenderOptions = {}): Generator<string> {
+    return renderChunks(this.compiled.nodes, this.prepare(data, options), this.executorOptions(options));
+  }
+
+  /**
+   * Collect the render-time settings the walk needs.
+   *
+   * @param options - Settings for this render
+   * @returns Executor settings
+   */
+  private executorOptions(options: RenderOptions): ExecutorOptions {
+    return {
+      strictData: options.strictData ?? false,
+      caseSensitive: this.compiled.caseSensitive,
+      defaultEscape: this.compiled.defaultEscape
+    };
   }
 
   /**

@@ -31,15 +31,7 @@ export type RowSource<T> = readonly T[] | (() => readonly T[]);
  */
 export type TemplateData = Record<string, unknown>;
 
-/**
- * Anything that can receive rendered output.
- *
- * Structural on purpose: a `node:stream.Writable` satisfies it, and so does a
- * three-line adapter on a runtime that has no such thing.
- */
-export interface OutputSink {
-  write(chunk: string): unknown;
-}
+export type { Sink as OutputSink } from '../runtime/Executor.js';
 
 /**
  * How TMPL_INCLUDE tags are resolved.

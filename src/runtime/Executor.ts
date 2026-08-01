@@ -1,15 +1,28 @@
 /**
  * Template executor
- * Walks the parsed template and produces its output
+ * Walks the parsed template and writes its output
+ *
+ * Output goes to a sink rather than coming back as a string, so nothing
+ * accumulates per node, per loop iteration or per conditional branch on the
+ * way out. Collecting the whole result is then just one sink among others.
  *
  * @module runtime/Executor
  */
 
-import type { ShapeNode } from '../parser/shape.js';
-import type { CondNode, EscapeType, LoopDataItem, LoopNode, ParseNode, TextNode, VarNode } from '../types.js';
-import { fastJoin, normalizeParamName } from '../utils/helpers.js';
-import { escapeValue } from './Escape.js';
+import type { CondNode, EscapeType, LoopNode, ParseNode, VarNode } from '../types.js';
+import { normalizeParamName } from '../utils/helpers.js';
 import type { RenderState } from './RenderState.js';
+import { renderVar, validateRow } from './renderNode.js';
+
+/**
+ * Anything that can receive rendered output.
+ *
+ * Structural on purpose: a `node:stream.Writable` satisfies it, and so does a
+ * three-line adapter on a runtime that has no such thing.
+ */
+export interface Sink {
+  write(chunk: string): unknown;
+}
 
 /**
  * Settings the executor needs at render time.
@@ -42,132 +55,87 @@ export class Executor {
 
   private readonly options: ExecutorOptions;
 
+  private readonly sink: Sink;
+
   /**
    * @param state - Values and scope position for this render
    * @param options - Render-time settings
+   * @param sink - Destination for the output
    */
-  constructor(state: RenderState, options: ExecutorOptions) {
+  constructor(state: RenderState, options: ExecutorOptions, sink: Sink) {
     this.state = state;
     this.options = options;
+    this.sink = sink;
   }
 
   /**
    * Render a list of nodes.
    *
    * @param nodes - Nodes to render
-   * @returns Rendered text
    */
-  execute(nodes: ParseNode[]): string {
-    const parts: string[] = [];
-
+  execute(nodes: ParseNode[]): void {
     for (const node of nodes) {
-      const output = this.executeNode(node);
-      if (output) {
-        parts.push(output);
-      }
+      this.executeNode(node);
     }
-
-    return fastJoin(parts);
   }
 
   /**
    * Render a single node.
    *
    * @param node - Node to render
-   * @returns Rendered text
    */
-  private executeNode(node: ParseNode): string {
+  private executeNode(node: ParseNode): void {
     switch (node.type) {
       case 'TEXT':
-        return Executor.executeTextNode(node);
+        this.sink.write(node.content);
+        break;
       case 'VAR':
-        return this.executeVarNode(node);
+        this.executeVarNode(node);
+        break;
       case 'LOOP':
-        return this.executeLoopNode(node);
+        this.executeLoopNode(node);
+        break;
       case 'COND':
-        return this.executeCondNode(node);
+        this.executeCondNode(node);
+        break;
       default:
-        return '';
+        break;
     }
-  }
-
-  /**
-   * Render literal text.
-   *
-   * @param node - Text node
-   * @returns The node's content
-   */
-  private static executeTextNode(node: TextNode): string {
-    return node.content;
   }
 
   /**
    * Render a variable, applying its escape or its default.
    *
    * @param node - Variable node
-   * @returns Rendered text
    */
-  private executeVarNode(node: VarNode): string {
-    const value = this.state.text(node.name);
+  private executeVarNode(node: VarNode): void {
+    const text = renderVar(node, this.state, this.options.defaultEscape);
 
-    if (value === undefined) {
-      // A DEFAULT is written straight to the output and never escaped.
-      return node.default ?? '';
-    }
-
-    // An absent ESCAPE attribute leaves the field undefined, which is what lets
-    // the default apply here without overriding an explicit ESCAPE=NONE.
-    const escapeType = node.escape ?? this.options.defaultEscape;
-
-    return escapeType === 'none' ? value : escapeValue(value, escapeType);
+    if (text) this.sink.write(text);
   }
 
   /**
    * Render a loop once per iteration.
    *
    * @param node - Loop node
-   * @returns Concatenated output of every iteration
    */
-  private executeLoopNode(node: LoopNode): string {
+  private executeLoopNode(node: LoopNode): void {
     const rows = this.state.rows(node.name);
-    if (rows.length === 0) {
-      return '';
-    }
+    if (rows.length === 0) return;
 
     const bodyShape = this.state.shape?.loops.get(this.normalize(node.name));
-    const parts: string[] = [];
 
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i];
       if (!row) continue;
 
-      this.validateRow(row, bodyShape);
+      if (this.options.strictData) {
+        validateRow(row, bodyShape, this.options.caseSensitive);
+      }
 
       this.state.enter(row, bodyShape, i, rows.length);
-      parts.push(this.execute(node.body));
+      this.execute(node.body);
       this.state.leave();
-    }
-
-    return fastJoin(parts);
-  }
-
-  /**
-   * Reject row keys the loop body never declares.
-   *
-   * A loop body is its own namespace, so a typo in a row is exactly as much a
-   * mistake as one at the top level and is reported the same way.
-   *
-   * @param row - One iteration's parameters
-   * @param bodyShape - Parameters the loop body declares
-   */
-  private validateRow(row: LoopDataItem, bodyShape: ShapeNode | undefined): void {
-    if (!this.options.strictData || !bodyShape) return;
-
-    for (const key of Object.keys(row)) {
-      const name = this.normalize(key);
-      if (bodyShape.decls.has(name)) continue;
-
-      throw new Error(`Attempt to set parameter '${name}', which the loop body does not declare (strictData is on)`);
     }
   }
 
@@ -175,17 +143,16 @@ export class Executor {
    * Render the branch a conditional selects.
    *
    * @param node - Conditional node
-   * @returns Rendered text of the selected branch
    */
-  private executeCondNode(node: CondNode): string {
+  private executeCondNode(node: CondNode): void {
     const isTrue = this.state.isTrue(node.name);
     const takeConsequent = node.condition === 'if' ? isTrue : !isTrue;
 
     if (takeConsequent) {
-      return this.execute(node.consequent);
+      this.execute(node.consequent);
+    } else if (node.alternate) {
+      this.execute(node.alternate);
     }
-
-    return node.alternate ? this.execute(node.alternate) : '';
   }
 
   /**
@@ -196,5 +163,30 @@ export class Executor {
    */
   private normalize(name: string): string {
     return normalizeParamName(name, this.options.caseSensitive);
+  }
+}
+
+/**
+ * A sink that keeps everything written to it.
+ */
+export class StringSink implements Sink {
+  private text = '';
+
+  /**
+   * Append a chunk.
+   *
+   * @param chunk - Text to append
+   */
+  write(chunk: string): void {
+    this.text += chunk;
+  }
+
+  /**
+   * Everything written so far.
+   *
+   * @returns Accumulated text
+   */
+  toString(): string {
+    return this.text;
   }
 }
