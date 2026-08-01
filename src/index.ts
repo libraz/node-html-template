@@ -8,7 +8,9 @@
  */
 
 // Compilation and rendering
+export type { CacheOptions } from './api/cache.js';
 export { compile, compileAsync, render } from './api/compile.js';
+export { Environment, type EnvironmentOptions } from './api/Environment.js';
 export { Template } from './api/Template.js';
 export type {
   AsyncCompileOptions,
