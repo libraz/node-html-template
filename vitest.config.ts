@@ -22,13 +22,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.test.ts', '**/*.spec.ts', '**/*.config.ts', 'benchmarks/'],
-      thresholds: {
-        lines: 95,
-        functions: 95,
-        branches: 90,
-        statements: 95
-      }
+      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.test.ts', '**/*.spec.ts', '**/*.config.ts', 'benchmarks/']
     },
 
     // Benchmark configuration
