@@ -9,10 +9,12 @@
  */
 
 import { CacheManager } from './cache/CacheManager.js';
+import { expandIncludes } from './compile/expandIncludes.js';
+import { nodeFileLoader } from './loader/nodeFile.js';
 import { loadTemplateSource } from './loader/source.js';
+import type { SyncTemplateLoader } from './loader/types.js';
 import { getGlobalOptions, normalizeOptions, setGlobalOptions } from './options.js';
 import { stripComments } from './parser/comments.js';
-import { processIncludes } from './parser/IncludeProcessor.js';
 import { Parser } from './parser/Parser.js';
 import { buildShape, type ShapeNode, withGlobalVars } from './parser/shape.js';
 import { Tokenizer } from './parser/Tokenizer.js';
@@ -29,7 +31,6 @@ import type {
   QueryOptions,
   QueryResult
 } from './types.js';
-import { getFileMtime } from './utils/FileResolver.js';
 import { applyFilters } from './utils/filters.js';
 import { createError } from './utils/helpers.js';
 import { maybeCacheLazyLoop, maybeCacheLazyValue } from './utils/LazyValue.js';
@@ -60,6 +61,9 @@ export class HTMLTemplate {
   /** Runtime parameter storage */
   private readonly context: Context;
 
+  /** Source of the template and anything it includes */
+  private readonly loader: SyncTemplateLoader;
+
   /**
    * Parameter namespaces used for name resolution.
    *
@@ -80,11 +84,16 @@ export class HTMLTemplate {
   constructor(options: HTMLTemplateOptions) {
     this.options = normalizeOptions(options);
     this.context = new Context(this.options);
+    this.loader = nodeFileLoader({
+      paths: this.options.path,
+      searchAllPaths: this.options.search_path_on_include,
+      encoding: this.options.utf8 ? 'utf-8' : this.options.open_mode || undefined
+    });
 
-    const { source, filename } = loadTemplateSource(this.options);
+    const { source, filename } = loadTemplateSource(this.options, this.loader);
     const prepared = this.preprocess(source, filename);
 
-    this.ast = this.parseTemplate(prepared.source, filename, prepared.mtimes);
+    this.ast = this.parseTemplate(prepared.source, filename, prepared.versions);
     const shape = buildShape(this.ast, this.options.case_sensitive);
     this.lookupShape = this.options.global_vars ? withGlobalVars(shape) : shape;
     this.introspection = new TemplateQuery(this.lookupShape, this.options.case_sensitive);
@@ -340,18 +349,24 @@ export class HTMLTemplate {
    *
    * @param source - Raw template text
    * @param filename - Path the text came from, if any
-   * @returns Prepared text and the modification times of included files
+   * @returns Prepared text and the versions of every template it draws on
    */
-  private preprocess(source: string, filename?: string): { source: string; mtimes: Map<string, number> } {
-    let prepared = applyFilters(source, this.options.filter);
-    prepared = stripComments(prepared);
+  private preprocess(source: string, filename?: string): { source: string; versions: Map<string, string | undefined> } {
+    const prepare = (text: string): string => stripComments(applyFilters(text, this.options.filter));
+    const prepared = prepare(source);
 
     if (this.options.no_includes) {
-      return { source: prepared, mtimes: new Map() };
+      return { source: prepared, versions: new Map() };
     }
 
-    const { source: expanded, mtimes } = processIncludes(prepared, this.options, filename);
-    return { source: expanded, mtimes };
+    const expanded = expandIncludes(prepared, filename, {
+      loader: this.loader,
+      maxDepth: this.options.max_includes,
+      onMissing: this.options.die_on_missing_include ? 'throw' : 'ignore',
+      prepare
+    });
+
+    return { source: expanded.text, versions: expanded.versions };
   }
 
   /**
@@ -359,10 +374,14 @@ export class HTMLTemplate {
    *
    * @param source - Prepared template text
    * @param filename - Path the template came from, if any
-   * @param includeMtimes - Modification times of included files
+   * @param versions - Versions of every template the text draws on
    * @returns Parsed template
    */
-  private parseTemplate(source: string, filename: string | undefined, includeMtimes: Map<string, number>): ParseNode[] {
+  private parseTemplate(
+    source: string,
+    filename: string | undefined,
+    versions: Map<string, string | undefined>
+  ): ParseNode[] {
     const cacheManager = new CacheManager(this.options);
     const cacheKey = CacheManager.generateKey(this.cacheIdentifier(filename, source));
 
@@ -389,13 +408,10 @@ export class HTMLTemplate {
     }
 
     if (cacheManager.isEnabled() && filename) {
-      if (!includeMtimes.has(filename)) {
-        const mtime = getFileMtime(filename);
-        if (mtime !== -1) {
-          includeMtimes.set(filename, mtime);
-        }
+      if (!versions.has(filename)) {
+        versions.set(filename, this.loader.version?.(filename));
       }
-      cacheManager.set(cacheKey, ast, includeMtimes);
+      cacheManager.set(cacheKey, ast, versions);
     }
 
     return ast;

@@ -766,6 +766,6 @@ export type ParseNode = TextNode | VarNode | LoopNode | CondNode | NoopNode;
  */
 export interface CacheEntry {
   nodes: ParseNode[];
-  mtimes: Map<string, number>; // File path -> mtime mapping
+  versions: Map<string, string | undefined>; // Template id -> loader version
   key: string;
 }

@@ -12,8 +12,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { expandIncludes } from '../src/compile/expandIncludes.js';
+import { nodeFileLoader } from '../src/loader/nodeFile.js';
 import { stripComments } from '../src/parser/comments.js';
-import { processIncludes } from '../src/parser/IncludeProcessor.js';
 import { Parser } from '../src/parser/Parser.js';
 import { Tokenizer } from '../src/parser/Tokenizer.js';
 import type { ParseNode } from '../src/types.js';
@@ -131,23 +132,25 @@ describe('AST snapshots with includes', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  /**
+   * Expand includes for a template rooted in the fixture directory.
+   *
+   * @param source - Entry template text
+   * @returns Flattened text
+   */
+  const expand = (source: string): string =>
+    expandIncludes(source, join(dir, 'root.tmpl'), {
+      loader: nodeFileLoader({ paths: [dir] }),
+      maxDepth: 10,
+      onMissing: 'throw',
+      prepare: (text) => text
+    }).text;
+
   it('expands three levels into a single flat tree', () => {
-    const root = join(dir, 'root.tmpl');
-    const expanded = processIncludes(
-      'top <TMPL_VAR NAME="top"> <TMPL_INCLUDE NAME="level1.tmpl">',
-      { path: [dir] },
-      root
-    );
-    expect(parse(expanded.source)).toMatchSnapshot();
+    expect(parse(expand('top <TMPL_VAR NAME="top"> <TMPL_INCLUDE NAME="level1.tmpl">'))).toMatchSnapshot();
   });
 
   it('expands a loop body that pulls in an include', () => {
-    const root = join(dir, 'root.tmpl');
-    const expanded = processIncludes(
-      '<TMPL_LOOP rows><TMPL_INCLUDE NAME="level2.tmpl"></TMPL_LOOP>',
-      { path: [dir] },
-      root
-    );
-    expect(parse(expanded.source)).toMatchSnapshot();
+    expect(parse(expand('<TMPL_LOOP rows><TMPL_INCLUDE NAME="level2.tmpl"></TMPL_LOOP>'))).toMatchSnapshot();
   });
 });

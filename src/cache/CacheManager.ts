@@ -121,7 +121,7 @@ export class CacheManager {
         }
         // Store in memory cache for faster access next time
         if (this.memoryCache) {
-          this.memoryCache.set(key, entry.nodes, entry.mtimes);
+          this.memoryCache.set(key, entry.nodes, entry.versions);
         }
         return entry;
       }
@@ -153,12 +153,12 @@ export class CacheManager {
    *
    * @param key - Cache key
    * @param nodes - Parsed template nodes
-   * @param mtimes - File mtimes for validation
+   * @param versions - Source template versions for validation
    */
-  set(key: string, nodes: ParseNode[], mtimes: Map<string, number>): void {
+  set(key: string, nodes: ParseNode[], versions: Map<string, string | undefined>): void {
     // Store in memory cache
     if (this.memoryCache) {
-      this.memoryCache.set(key, nodes, mtimes);
+      this.memoryCache.set(key, nodes, versions);
       if (this.debug) {
         console.error('[CacheManager] Stored in memory cache:', key);
       }
@@ -166,7 +166,7 @@ export class CacheManager {
 
     // Store in file cache
     if (this.fileCache) {
-      this.fileCache.set(key, nodes, mtimes);
+      this.fileCache.set(key, nodes, versions);
       if (this.debug) {
         console.error('[CacheManager] Stored in file cache:', key);
       }

@@ -4,14 +4,14 @@
  *
  * Features:
  * - LRU-style eviction (via Map insertion order)
- * - mtime validation (unless blind_cache enabled)
+ * - Revalidation against source template versions (unless blind_cache enabled)
  * - Fast hash-based key lookup
  *
  * @module cache/MemoryCache
  */
 
 import type { CacheEntry, ParseNode } from '../types.js';
-import { validateMtimes } from '../utils/FileResolver.js';
+import { versionsUnchanged } from './validate.js';
 
 /**
  * In-memory cache for parsed templates
@@ -24,7 +24,7 @@ export class MemoryCache {
   private cache: Map<string, CacheEntry>;
 
   /**
-   * Blind cache mode (skip mtime validation)
+   * Blind cache mode (skip revalidation)
    */
   private blindMode: boolean;
 
@@ -37,7 +37,7 @@ export class MemoryCache {
   /**
    * Create memory cache
    *
-   * @param blindMode - Enable blind cache (skip mtime validation)
+   * @param blindMode - Enable blind cache (skip revalidation)
    * @param maxSize - Maximum number of cached templates
    */
   constructor(blindMode = false, maxSize = 100) {
@@ -67,8 +67,8 @@ export class MemoryCache {
       return entry;
     }
 
-    // Validate mtimes
-    if (!validateMtimes(entry.mtimes)) {
+    // Validate that every source template is unchanged
+    if (!versionsUnchanged(entry.versions)) {
       // Stale - remove from cache
       this.cache.delete(key);
       return null;
@@ -85,12 +85,12 @@ export class MemoryCache {
    *
    * @param key - Cache key
    * @param nodes - Parsed template nodes
-   * @param mtimes - File mtimes for validation
+   * @param versions - Source template versions for validation
    */
-  set(key: string, nodes: ParseNode[], mtimes: Map<string, number>): void {
+  set(key: string, nodes: ParseNode[], versions: Map<string, string | undefined>): void {
     const entry: CacheEntry = {
       nodes,
-      mtimes,
+      versions,
       key
     };
 

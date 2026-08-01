@@ -5,7 +5,7 @@
  * Features:
  * - JSON serialization of ParseNode tree
  * - Automatic cache directory creation
- * - mtime validation
+ * - Revalidation against the loader-reported version of each source template
  * - Safe file I/O with error handling
  *
  * @module cache/FileCache
@@ -14,8 +14,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CacheEntry, ParseNode } from '../types.js';
-import { validateMtimes } from '../utils/FileResolver.js';
 import { createError } from '../utils/helpers.js';
+import { versionsUnchanged } from './validate.js';
 
 /**
  * File-based cache for parsed templates
@@ -91,13 +91,13 @@ export class FileCache {
       const content = readFileSync(filePath, 'utf-8');
       const entry = JSON.parse(content) as CacheEntry;
 
-      // Reconstruct mtimes Map (JSON serializes Map as object)
-      if (entry.mtimes && typeof entry.mtimes === 'object') {
-        entry.mtimes = new Map(Object.entries(entry.mtimes).map(([filePath, mtime]) => [filePath, Number(mtime)]));
+      // Reconstruct versions Map (JSON serializes Map as object)
+      if (entry.versions && typeof entry.versions === 'object') {
+        entry.versions = new Map(Object.entries(entry.versions).map(([id, version]) => [id, String(version)]));
       }
 
-      // Validate mtimes
-      if (!validateMtimes(entry.mtimes)) {
+      // Validate that every source template is unchanged
+      if (!versionsUnchanged(entry.versions)) {
         // Stale - remove cache file
         this.delete(key);
         return null;
@@ -116,19 +116,21 @@ export class FileCache {
    *
    * @param key - Cache key
    * @param nodes - Parsed template nodes
-   * @param mtimes - File mtimes for validation
+   * @param versions - Source template versions for validation
    */
-  set(key: string, nodes: ParseNode[], mtimes: Map<string, number>): void {
+  set(key: string, nodes: ParseNode[], versions: Map<string, string | undefined>): void {
     const entry: CacheEntry = {
       nodes,
-      mtimes,
+      versions,
       key
     };
 
-    // Convert Map to object for JSON serialization
+    // Convert Map to object for JSON serialization. Entries whose version is
+    // undefined drop out, which is correct: those sources are immutable and
+    // there is nothing to revalidate.
     const serializable = {
       ...entry,
-      mtimes: Object.fromEntries(entry.mtimes.entries())
+      versions: Object.fromEntries(entry.versions.entries())
     };
 
     const filePath = this.getCacheFilePath(key);

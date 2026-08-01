@@ -80,11 +80,11 @@ export function nodeFileLoader(options: NodeFileLoaderOptions = {}): SyncTemplat
     },
 
     read(id: string): TemplateResource {
-      return { id, text: readFileSync(id, { encoding }), version: versionOf(id) };
+      return { id, text: readFileSync(id, { encoding }), version: fileVersion(id) };
     },
 
     version(id: string): string | undefined {
-      return versionOf(id);
+      return fileVersion(id);
     }
   };
 
@@ -135,7 +135,7 @@ function isFile(path: string): boolean {
  * @param path - Path to stat
  * @returns Version string, or undefined when the file cannot be stat'd
  */
-function versionOf(path: string): string | undefined {
+export function fileVersion(path: string): string | undefined {
   try {
     const stats = statSync(path);
     return `${stats.mtimeMs}:${stats.size}`;

@@ -7,12 +7,10 @@
  * @module loader/source
  */
 
-import { readFileSync } from 'node:fs';
 import type { Readable } from 'node:stream';
 import type { HTMLTemplateOptions } from '../types.js';
-import { parseOpenMode, readFileWithEncoding } from '../utils/encoding.js';
-import { resolveFile } from '../utils/FileResolver.js';
 import { createError } from '../utils/helpers.js';
+import type { SyncTemplateLoader } from './types.js';
 
 /**
  * Loaded template text, plus the file it came from when it came from disk.
@@ -26,12 +24,13 @@ export interface LoadedSource {
  * Load the template text described by the options.
  *
  * @param options - Normalized options
+ * @param loader - Source of template files
  * @returns Template text and resolved filename
  * @throws Error when no usable source is configured
  */
-export function loadTemplateSource(options: Required<HTMLTemplateOptions>): LoadedSource {
+export function loadTemplateSource(options: Required<HTMLTemplateOptions>, loader: SyncTemplateLoader): LoadedSource {
   if (options.type && options.source !== undefined) {
-    return loadFromTypedSource(options);
+    return loadFromTypedSource(options, loader);
   }
 
   if (options.scalarref !== undefined) {
@@ -47,7 +46,7 @@ export function loadTemplateSource(options: Required<HTMLTemplateOptions>): Load
   }
 
   if (options.filename !== undefined) {
-    return loadFromFile(options.filename, options);
+    return loadFromFile(options.filename, loader);
   }
 
   throw createError('No template source specified (need filename, scalarref, arrayref, or filehandle)');
@@ -57,14 +56,15 @@ export function loadTemplateSource(options: Required<HTMLTemplateOptions>): Load
  * Resolve the `type` + `source` option pair.
  *
  * @param options - Normalized options
+ * @param loader - Source of template files
  * @returns Template text and resolved filename
  */
-function loadFromTypedSource(options: Required<HTMLTemplateOptions>): LoadedSource {
+function loadFromTypedSource(options: Required<HTMLTemplateOptions>, loader: SyncTemplateLoader): LoadedSource {
   const { type, source } = options;
 
   switch (type) {
     case 'filename':
-      return loadFromFile(source as string, options);
+      return loadFromFile(source as string, loader);
     case 'scalarref':
       return { source: source as string };
     case 'arrayref':
@@ -77,42 +77,16 @@ function loadFromTypedSource(options: Required<HTMLTemplateOptions>): LoadedSour
 }
 
 /**
- * Read a template file, honouring `utf8` / `open_mode`.
+ * Resolve and read the entry template through the loader.
  *
  * @param filename - Filename to resolve and read
- * @param options - Normalized options
- * @returns Template text and the path it was read from
+ * @param loader - Source of template files
+ * @returns Template text and the id it was read from
  */
-function loadFromFile(filename: string, options: Required<HTMLTemplateOptions>): Required<LoadedSource> {
-  const resolved = resolveFile(filename, {
-    path: options.path,
-    searchPathOnInclude: options.search_path_on_include
-  });
+function loadFromFile(filename: string, loader: SyncTemplateLoader): Required<LoadedSource> {
+  const id = loader.resolve({ name: filename, include: false });
 
-  return {
-    source: readTemplateFile(resolved.filepath, options),
-    filename: resolved.filepath
-  };
-}
-
-/**
- * Read a resolved template file with the configured encoding.
- *
- * Shared with the include pipeline so a template and its includes are always
- * decoded the same way.
- *
- * @param filepath - Absolute path to read
- * @param options - Options carrying `utf8` / `open_mode`
- * @returns File contents
- */
-export function readTemplateFile(filepath: string, options: HTMLTemplateOptions): string {
-  if (options.utf8) {
-    return readFileWithEncoding(filepath, 'utf-8');
-  }
-  if (options.open_mode) {
-    return readFileWithEncoding(filepath, parseOpenMode(options.open_mode));
-  }
-  return readFileSync(filepath, 'utf-8');
+  return { source: loader.read(id).text, filename: id };
 }
 
 /**

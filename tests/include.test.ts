@@ -3,15 +3,33 @@
  * Tests for template inclusion functionality
  */
 
-import { unlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { HTMLTemplate } from '../src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const fixturesPath = join(__dirname, 'fixtures', 'includes');
+
+/**
+ * Working copy of the include fixtures.
+ *
+ * Several tests write extra templates alongside the fixtures. Doing that in
+ * the repository would make the suite order-dependent under vitest's parallel
+ * file execution, so the fixtures are copied somewhere disposable first.
+ */
+let fixturesPath: string;
+
+beforeAll(() => {
+  fixturesPath = mkdtempSync(join(tmpdir(), 'html-template-includes-'));
+  cpSync(join(__dirname, 'fixtures', 'includes'), fixturesPath, { recursive: true });
+});
+
+afterAll(() => {
+  rmSync(fixturesPath, { recursive: true, force: true });
+});
 
 describe('TMPL_INCLUDE', () => {
   describe('Basic include functionality', () => {
@@ -212,6 +230,49 @@ describe('TMPL_INCLUDE', () => {
       const output = tmpl.output();
       expect(output).toContain('Site Header');
       expect(output).toContain('© 2025 Test Site');
+    });
+
+    // Ignoring missing includes must not also ignore structural failures:
+    // a cycle or a blown depth limit is a broken template either way.
+    it('still reports a cycle when missing includes are ignored', () => {
+      expect(() => {
+        new HTMLTemplate({
+          filename: join(fixturesPath, 'circular-a.tmpl'),
+          die_on_missing_include: false
+        });
+      }).toThrow(/likely recursive includes/);
+    });
+
+    it('still reports exceeding max_includes when missing includes are ignored', () => {
+      const first = join(fixturesPath, 'ignore-chain1.tmpl');
+      const second = join(fixturesPath, 'ignore-chain2.tmpl');
+      const third = join(fixturesPath, 'ignore-chain3.tmpl');
+
+      writeFileSync(first, '<TMPL_INCLUDE NAME="ignore-chain2.tmpl">');
+      writeFileSync(second, '<TMPL_INCLUDE NAME="ignore-chain3.tmpl">');
+      writeFileSync(third, 'end of chain');
+
+      expect(() => {
+        new HTMLTemplate({
+          filename: first,
+          max_includes: 2,
+          die_on_missing_include: false
+        });
+      }).toThrow(/likely recursive includes/);
+
+      unlinkSync(first);
+      unlinkSync(second);
+      unlinkSync(third);
+    });
+
+    it('keeps resolving nested includes that follow an ignored one', () => {
+      const tmpl = new HTMLTemplate({
+        scalarref: '<TMPL_INCLUDE NAME="missing.tmpl"><TMPL_INCLUDE NAME="nested-outer.tmpl">',
+        path: [fixturesPath],
+        die_on_missing_include: false
+      });
+
+      expect(tmpl.output()).toContain('Inner:');
     });
   });
 
