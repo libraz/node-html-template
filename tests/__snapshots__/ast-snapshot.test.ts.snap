@@ -1,0 +1,476 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AST snapshots > conditionals 1`] = `
+[
+  {
+    "alternate": [
+      {
+        "content": "no",
+        "type": "TEXT",
+      },
+    ],
+    "condition": "if",
+    "consequent": [
+      {
+        "content": "yes",
+        "type": "TEXT",
+      },
+    ],
+    "name": "a",
+    "type": "COND",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "alternate": undefined,
+    "condition": "unless",
+    "consequent": [
+      {
+        "content": "not b",
+        "type": "TEXT",
+      },
+    ],
+    "name": "b",
+    "type": "COND",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "alternate": undefined,
+    "condition": "if",
+    "consequent": [
+      {
+        "alternate": undefined,
+        "condition": "if",
+        "consequent": [
+          {
+            "content": "both",
+            "type": "TEXT",
+          },
+        ],
+        "name": "b",
+        "type": "COND",
+      },
+    ],
+    "name": "a",
+    "type": "COND",
+  },
+]
+`;
+
+exports[`AST snapshots > escape variants 1`] = `
+[
+  {
+    "default": undefined,
+    "escape": "html",
+    "name": "a",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": "js",
+    "name": "b",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": "url",
+    "name": "c",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": "none",
+    "name": "d",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": "none",
+    "name": "e",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": "html",
+    "name": "f",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "g",
+    "type": "VAR",
+  },
+]
+`;
+
+exports[`AST snapshots > html comment syntax 1`] = `
+[
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "a",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "alternate": undefined,
+    "condition": "if",
+    "consequent": [
+      {
+        "content": "yes",
+        "type": "TEXT",
+      },
+    ],
+    "name": "b",
+    "type": "COND",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "body": [
+      {
+        "default": undefined,
+        "escape": undefined,
+        "name": "d",
+        "type": "VAR",
+      },
+    ],
+    "name": "c",
+    "type": "LOOP",
+  },
+]
+`;
+
+exports[`AST snapshots > loop with context vars 1`] = `
+[
+  {
+    "body": [
+      {
+        "alternate": undefined,
+        "condition": "if",
+        "consequent": [
+          {
+            "content": "[",
+            "type": "TEXT",
+          },
+        ],
+        "name": "__first__",
+        "type": "COND",
+      },
+      {
+        "default": undefined,
+        "escape": undefined,
+        "name": "name",
+        "type": "VAR",
+      },
+      {
+        "alternate": undefined,
+        "condition": "unless",
+        "consequent": [
+          {
+            "content": ", ",
+            "type": "TEXT",
+          },
+        ],
+        "name": "__last__",
+        "type": "COND",
+      },
+    ],
+    "name": "items",
+    "type": "LOOP",
+  },
+]
+`;
+
+exports[`AST snapshots > nested loops 1`] = `
+[
+  {
+    "body": [
+      {
+        "content": "
+  ",
+        "type": "TEXT",
+      },
+      {
+        "default": undefined,
+        "escape": undefined,
+        "name": "x",
+        "type": "VAR",
+      },
+      {
+        "content": "
+  ",
+        "type": "TEXT",
+      },
+      {
+        "body": [
+          {
+            "default": undefined,
+            "escape": undefined,
+            "name": "y",
+            "type": "VAR",
+          },
+        ],
+        "name": "inner",
+        "type": "LOOP",
+      },
+      {
+        "content": "
+",
+        "type": "TEXT",
+      },
+    ],
+    "name": "outer",
+    "type": "LOOP",
+  },
+]
+`;
+
+exports[`AST snapshots > tmpl_comment stripping 1`] = `
+[
+  {
+    "content": "beforeafter",
+    "type": "TEXT",
+  },
+]
+`;
+
+exports[`AST snapshots > unknown tag in lenient mode 1`] = `
+[
+  {
+    "content": "a ",
+    "type": "TEXT",
+  },
+  {
+    "content": "<TMPL_BOGUS NAME="x">",
+    "type": "TEXT",
+  },
+  {
+    "content": " b ",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "real",
+    "type": "VAR",
+  },
+]
+`;
+
+exports[`AST snapshots > vanguard percent vars 1`] = `
+[
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "first",
+    "type": "VAR",
+  },
+  {
+    "content": " and ",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "second",
+    "type": "VAR",
+  },
+  {
+    "content": " and ",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "third",
+    "type": "VAR",
+  },
+]
+`;
+
+exports[`AST snapshots > variables and defaults 1`] = `
+[
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "title",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "bare",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "unquoted",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": "hello",
+    "escape": undefined,
+    "name": "greeting",
+    "type": "VAR",
+  },
+  {
+    "content": "
+",
+    "type": "TEXT",
+  },
+  {
+    "default": "",
+    "escape": undefined,
+    "name": "blank",
+    "type": "VAR",
+  },
+]
+`;
+
+exports[`AST snapshots > whitespace around tags 1`] = `
+[
+  {
+    "content": "line one
+  ",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "x",
+    "type": "VAR",
+  },
+  {
+    "content": "  
+
+line four",
+    "type": "TEXT",
+  },
+]
+`;
+
+exports[`AST snapshots with includes > expands a loop body that pulls in an include 1`] = `
+[
+  {
+    "body": [
+      {
+        "content": "[deepest ",
+        "type": "TEXT",
+      },
+      {
+        "default": undefined,
+        "escape": undefined,
+        "name": "deep",
+        "type": "VAR",
+      },
+      {
+        "content": "]",
+        "type": "TEXT",
+      },
+    ],
+    "name": "rows",
+    "type": "LOOP",
+  },
+]
+`;
+
+exports[`AST snapshots with includes > expands three levels into a single flat tree 1`] = `
+[
+  {
+    "content": "top ",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "top",
+    "type": "VAR",
+  },
+  {
+    "content": " (middle ",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "mid",
+    "type": "VAR",
+  },
+  {
+    "content": " [deepest ",
+    "type": "TEXT",
+  },
+  {
+    "default": undefined,
+    "escape": undefined,
+    "name": "deep",
+    "type": "VAR",
+  },
+  {
+    "content": "])",
+    "type": "TEXT",
+  },
+]
+`;
