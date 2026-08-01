@@ -1,36 +1,33 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
+import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
+  define: {
+    __PKG_VERSION__: JSON.stringify(pkg.version)
+  },
   plugins: [
     dts({
-      insertTypesEntry: true,
-      tsconfigPath: './tsconfig.json'
+      tsconfigPath: './tsconfig.build.json',
+      entryRoot: 'src',
+      insertTypesEntry: false
     })
   ],
   build: {
     lib: {
-      entry: resolve(__dirname, 'src/index.ts'),
-      name: 'HTMLTemplate',
-      formats: ['es'],
-      fileName: () => 'index.js'
+      entry: {
+        index: resolve(import.meta.dirname, 'src/index.ts')
+      },
+      formats: ['es']
     },
     rollupOptions: {
-      external: [
-        'fs',
-        'path',
-        'crypto',
-        'stream',
-        'util',
-        'node:fs',
-        'node:path',
-        'node:crypto',
-        'node:stream',
-        'node:util'
-      ],
+      // A predicate rather than a hand-maintained list, so a newly used
+      // built-in can never be bundled by accident.
+      external: (id) => id.startsWith('node:'),
       output: {
-        preserveModules: false,
+        entryFileNames: '[name].js',
+        chunkFileNames: 'chunks/[name]-[hash].js',
         exports: 'named'
       }
     },

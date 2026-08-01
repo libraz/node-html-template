@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config';
+import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
+  // Mirrors the build-time substitution in vite.config.ts so src/version.ts
+  // resolves under vitest too.
+  define: {
+    __PKG_VERSION__: JSON.stringify(pkg.version)
+  },
   test: {
     // Test environment
     environment: 'node',
@@ -16,7 +22,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.test.ts', '**/*.spec.ts', '**/*.config.ts', 'bench/'],
+      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.test.ts', '**/*.spec.ts', '**/*.config.ts', 'benchmarks/'],
       thresholds: {
         lines: 95,
         functions: 95,
@@ -27,7 +33,7 @@ export default defineConfig({
 
     // Benchmark configuration
     benchmark: {
-      include: ['bench/**/*.bench.ts', 'benchmarks/**/*.bench.ts']
+      include: ['benchmarks/**/*.bench.ts']
     },
 
     // Include/exclude patterns

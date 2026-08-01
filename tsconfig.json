@@ -7,6 +7,9 @@
     "moduleResolution": "bundler",
 
     // Emit
+    // Declarations are emitted by vite-plugin-dts from tsconfig.build.json;
+    // tsc itself only ever type-checks.
+    "noEmit": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -46,7 +49,7 @@
 
     // Performance optimization
     "incremental": true,
-    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo",
 
     // Module resolution
     "resolveJsonModule": true,
