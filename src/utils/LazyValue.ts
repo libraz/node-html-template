@@ -33,19 +33,6 @@ export function isLazyLoop(value: ParamValue): value is LazyLoopValue {
 }
 
 /**
- * Evaluate lazy value if it's a function, otherwise return as-is
- *
- * @param value - Value to evaluate
- * @returns Evaluated value
- */
-export function evaluateLazyValue(value: ParamValue): string | number | boolean | null | undefined | LoopDataItem[] {
-  if (isFunction(value)) {
-    return value();
-  }
-  return value;
-}
-
-/**
  * Wrapper for cached lazy value
  * Evaluates function once and caches result
  */
@@ -73,23 +60,6 @@ export class CachedLazyValue {
       this.evaluated = true;
     }
     return this.cachedValue;
-  }
-
-  /**
-   * Check if value has been evaluated
-   *
-   * @returns True if already evaluated
-   */
-  isEvaluated(): boolean {
-    return this.evaluated;
-  }
-
-  /**
-   * Clear cached value (force re-evaluation on next call)
-   */
-  clear(): void {
-    this.evaluated = false;
-    this.cachedValue = undefined;
   }
 }
 
@@ -127,48 +97,29 @@ export class CachedLazyLoop {
     }
     return this.cachedData;
   }
-
-  /**
-   * Check if data has been evaluated
-   *
-   * @returns True if already evaluated
-   */
-  isEvaluated(): boolean {
-    return this.evaluated;
-  }
-
-  /**
-   * Clear cached data (force re-evaluation on next call)
-   */
-  clear(): void {
-    this.evaluated = false;
-    this.cachedData = [];
-  }
 }
 
 /**
- * Create cached lazy value if caching is enabled
+ * Wrap a lazy value so the render calls it at most once
  *
  * @param value - Lazy value or regular value
- * @param enableCache - Whether to enable caching
- * @returns Cached wrapper or original value
+ * @returns Cached wrapper for a function, otherwise the value unchanged
  */
-export function maybeCacheLazyValue(value: ParamValue, enableCache: boolean): ParamValue | CachedLazyValue {
-  if (enableCache && isLazyValue(value)) {
+export function maybeCacheLazyValue(value: ParamValue): ParamValue | CachedLazyValue {
+  if (isLazyValue(value)) {
     return new CachedLazyValue(value);
   }
   return value;
 }
 
 /**
- * Create cached lazy loop if caching is enabled
+ * Wrap a lazy loop so the render calls it at most once
  *
  * @param value - Lazy loop or regular loop data
- * @param enableCache - Whether to enable caching
- * @returns Cached wrapper or original value
+ * @returns Cached wrapper for a function, otherwise the value unchanged
  */
-export function maybeCacheLazyLoop(value: ParamValue, enableCache: boolean): ParamValue | CachedLazyLoop {
-  if (enableCache && isLazyLoop(value)) {
+export function maybeCacheLazyLoop(value: ParamValue): ParamValue | CachedLazyLoop {
+  if (isLazyLoop(value)) {
     return new CachedLazyLoop(value as LazyLoopValue);
   }
   return value;

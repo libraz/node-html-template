@@ -190,9 +190,7 @@ export class Template<T extends TemplateData = TemplateData> {
     const decl = this.compiled.lookupShape.decls.get(key);
     const isLoop = decl ? declKind(decl) === 'LOOP' : false;
 
-    return (
-      isLoop ? maybeCacheLazyLoop(value as ParamValue, true) : maybeCacheLazyValue(value as ParamValue, true)
-    ) as ParamValue;
+    return (isLoop ? maybeCacheLazyLoop(value as ParamValue) : maybeCacheLazyValue(value as ParamValue)) as ParamValue;
   }
 
   /**

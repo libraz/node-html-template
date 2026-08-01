@@ -70,16 +70,3 @@ export function createError(message: string, filename?: string, line?: number): 
   }
   return new Error(msg);
 }
-
-/**
- * Array join optimized for V8
- *
- * @param parts - Array of strings to join
- * @param separator - Separator string (default: empty)
- * @returns Joined string
- */
-export function fastJoin(parts: string[], separator = ''): string {
-  if (parts.length === 0) return '';
-  if (parts.length === 1) return parts[0] ?? '';
-  return parts.join(separator);
-}
