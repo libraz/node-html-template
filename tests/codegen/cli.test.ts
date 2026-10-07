@@ -6,7 +6,11 @@
  * rather than the disk underneath it.
  */
 
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { nodeIO } from '../../src/cli/io.js';
 import type { CommandIO } from '../../src/cli/run.js';
 import { run } from '../../src/cli/run.js';
 
@@ -231,5 +235,80 @@ describe('run with includes', () => {
 
     expect(run(['views/page.tmpl'], io)).toBe(1);
     expect(err.join('\n')).toContain('absent.tmpl');
+  });
+});
+
+describe('run with colliding or invalid names', () => {
+  it('fails naming both files when two templates share a stem, writing nothing', () => {
+    const { io, err, written } = harness({
+      'views/admin/index.tmpl': '<TMPL_VAR NAME="a">',
+      'views/shop/index.tmpl': '<TMPL_VAR NAME="b">'
+    });
+
+    expect(run(['views', '-o', 'out.d.ts'], io)).toBe(1);
+    expect(err.join('\n')).toMatch(/IndexData.*views\/admin\/index\.tmpl.*views\/shop\/index\.tmpl/);
+    expect('out.d.ts' in written).toBe(false);
+  });
+
+  it('fails in --check and --split modes too', () => {
+    const { io } = harness({
+      'views/a/page.tmpl': '<TMPL_LOOP NAME="r"><TMPL_VAR NAME="c"></TMPL_LOOP>',
+      'views/b/page.tmpl': 'x',
+      'out.d.ts': ''
+    });
+
+    expect(run(['views', '--split'], io)).toBe(1);
+    expect(run(['views', '--check', '-o', 'out.d.ts'], io)).toBe(1);
+  });
+
+  it('fails when the suffix makes the name invalid', () => {
+    const { io, err, out } = harness({ 'views/page.tmpl': 'x' });
+
+    expect(run(['views/page.tmpl', '--suffix=-data'], io)).toBe(1);
+    expect(err.join('\n')).toContain('not a valid TypeScript identifier');
+    expect(out).toHaveLength(0);
+  });
+});
+
+describe('nodeIO listFiles', () => {
+  let root: string;
+  let previous: string;
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'codegen-walk-'));
+    mkdirSync(join(root, 'views', 'sub'), { recursive: true });
+    writeFileSync(join(root, 'views', 'a.tmpl'), 'a');
+    writeFileSync(join(root, 'views', 'sub', 'b.tmpl'), 'b');
+    previous = process.cwd();
+    process.chdir(root);
+  });
+
+  afterAll(() => {
+    process.chdir(previous);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it.each(['views', 'views/', './views', './views/', 'views//', 'ABSOLUTE'])(
+    'returns paths relative to %s that resolve to the files',
+    (spelling) => {
+      const io = nodeIO(
+        () => {},
+        () => {}
+      );
+      const dir = spelling === 'ABSOLUTE' ? join(process.cwd(), 'views') : spelling;
+      const entries = io.listFiles(dir).sort();
+
+      expect(entries).toEqual(['a.tmpl', 'sub/b.tmpl']);
+      for (const entry of entries) expect(io.exists(io.join(dir, entry))).toBe(true);
+    }
+  );
+
+  it('walks the current directory', () => {
+    const io = nodeIO(
+      () => {},
+      () => {}
+    );
+
+    expect(io.listFiles('.').sort()).toEqual(['views/a.tmpl', 'views/sub/b.tmpl']);
   });
 });

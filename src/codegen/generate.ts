@@ -17,6 +17,12 @@ import type { CompileOptions, ParamInfo, TemplateShape } from '../api/types.js';
 /** Name of the package the generated types import from */
 const RUNTIME_MODULE = '@libraz/html-template';
 
+/** A name that can be used as a TypeScript interface name */
+const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/** Row type of a loop whose body reads no row member: any row the runtime renders is accepted */
+const EMPTY_ROW = 'RowSource<{}>';
+
 /**
  * Names a loop body gets for free when loop context variables are on.
  *
@@ -80,11 +86,14 @@ export interface TemplateEntry {
  * @param source - Template text
  * @param options - Generation settings
  * @returns TypeScript declarations, without imports
+ * @throws {Error} When an interface name is not a valid identifier or is used twice
  */
 export function generateTypes(source: string, options: CodegenOptions = {}): string {
   const template = compile(source, options.compile);
 
-  return declare(template.shape, options.name ?? 'TemplateData', options).join('\n\n');
+  const name = options.name ?? 'TemplateData';
+
+  return declare(template.shape, name, { taken: new Map(), origin: name }, options).join('\n\n');
 }
 
 /**
@@ -93,10 +102,18 @@ export function generateTypes(source: string, options: CodegenOptions = {}): str
  * @param entries - Templates to describe
  * @param options - Generation settings
  * @returns TypeScript source, ready to write to a `.d.ts`
+ * @throws {Error} When an interface name is not a valid identifier, or two
+ *   templates produce the same name
  */
 export function generateModule(entries: readonly TemplateEntry[], options: CodegenOptions = {}): string {
+  const taken = new Map<string, string>();
   const blocks = entries.flatMap((entry) =>
-    declare(compile(entry.source, { ...options.compile, filename: entry.filename }).shape, entry.name, options)
+    declare(
+      compile(entry.source, { ...options.compile, filename: entry.filename }).shape,
+      entry.name,
+      { taken, origin: entry.filename ?? entry.name },
+      options
+    )
   );
 
   const needed = new Set<string>();
@@ -113,19 +130,42 @@ export function generateModule(entries: readonly TemplateEntry[], options: Codeg
   return `${[header.join('\n'), ...blocks].join('\n\n')}\n`;
 }
 
+/** Interface names already emitted into one module, and where the current template came from */
+interface Scope {
+  /** Interface name to the origin that claimed it */
+  taken: Map<string, string>;
+  origin: string;
+}
+
 /**
  * Build the declarations for one shape, outermost interface first.
  *
+ * The only place an interface name is emitted: it must be a valid identifier
+ * and unique within the module, whether the interface is a template's own or
+ * a split row.
+ *
  * @param shape - Parameters the template declares
  * @param name - Interface name
+ * @param scope - Names claimed so far in the module
  * @param options - Generation settings
  * @returns One block of source per interface
+ * @throws {Error} When the name is not an identifier or is already taken
  */
-function declare(shape: TemplateShape, name: string, options: CodegenOptions): string[] {
-  const extra: string[] = [];
-  const body = members(shape, name, options, extra, 1);
+function declare(shape: TemplateShape, name: string, scope: Scope, options: CodegenOptions): string[] {
+  if (!IDENTIFIER.test(name)) {
+    throw new Error(`Interface name '${name}' for ${scope.origin} is not a valid TypeScript identifier.`);
+  }
 
-  const main = body.length === 0 ? `export interface ${name} {}` : `export interface ${name} {\n${body}\n}`;
+  const owner = scope.taken.get(name);
+  if (owner !== undefined) {
+    throw new Error(`Interface name '${name}' is produced by both ${owner} and ${scope.origin}.`);
+  }
+  scope.taken.set(name, scope.origin);
+
+  const extra: string[] = [];
+  const body = members(shape, name, scope, options, extra, 1);
+
+  const main = `export interface ${name} {${body.length === 0 ? '' : `\n${body}\n`}}`;
 
   return [main, ...extra];
 }
@@ -135,12 +175,20 @@ function declare(shape: TemplateShape, name: string, options: CodegenOptions): s
  *
  * @param shape - Parameters declared at this level
  * @param name - Name of the interface being built, used to name split rows
+ * @param scope - Names claimed so far in the module
  * @param options - Generation settings
  * @param extra - Collects split row interfaces
  * @param depth - Indentation depth
  * @returns Indented member lines
  */
-function members(shape: TemplateShape, name: string, options: CodegenOptions, extra: string[], depth: number): string {
+function members(
+  shape: TemplateShape,
+  name: string,
+  scope: Scope,
+  options: CodegenOptions,
+  extra: string[],
+  depth: number
+): string {
   const indent = '  '.repeat(depth);
   const lines: string[] = [];
 
@@ -151,7 +199,9 @@ function members(shape: TemplateShape, name: string, options: CodegenOptions, ex
     if (!info) continue;
 
     const optional = options.required ? '' : '?';
-    lines.push(`${indent}${property(paramName)}${optional}: ${valueType(shape, info, name, options, extra, depth)};`);
+    lines.push(
+      `${indent}${property(paramName)}${optional}: ${valueType(shape, info, name, scope, options, extra, depth)};`
+    );
   }
 
   return lines.join('\n');
@@ -163,6 +213,7 @@ function members(shape: TemplateShape, name: string, options: CodegenOptions, ex
  * @param shape - Parameters declared at this level
  * @param info - The parameter's declaration
  * @param name - Name of the interface being built
+ * @param scope - Names claimed so far in the module
  * @param options - Generation settings
  * @param extra - Collects split row interfaces
  * @param depth - Indentation depth
@@ -172,24 +223,25 @@ function valueType(
   shape: TemplateShape,
   info: ParamInfo,
   name: string,
+  scope: Scope,
   options: CodegenOptions,
   extra: string[],
   depth: number
 ): string {
   if (info.kind === 'loop') {
     const rows = shape.loop(info.name) ?? shape.loop(info.key);
-    if (!rows) return 'RowSource<Record<string, never>>';
+    if (!rows) return EMPTY_ROW;
 
     if (options.split) {
       const rowName = `${name}${pascalCase(info.name)}Row`;
-      extra.push(...declare(rows, rowName, options));
+      extra.push(...declare(rows, rowName, { ...scope, origin: `${scope.origin} (loop '${info.name}')` }, options));
       return `RowSource<${rowName}>`;
     }
 
-    const body = members(rows, name, options, extra, depth + 1);
+    const body = members(rows, name, scope, options, extra, depth + 1);
     const close = '  '.repeat(depth);
 
-    return body.length === 0 ? 'RowSource<Record<string, never>>' : `RowSource<{\n${body}\n${close}}>`;
+    return body.length === 0 ? EMPTY_ROW : `RowSource<{\n${body}\n${close}}>`;
   }
 
   // A name used only as a condition is never written to the output, so any
@@ -209,7 +261,7 @@ function valueType(
  * @returns Property name as it appears in the interface
  */
 function property(name: string): string {
-  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return name;
+  if (IDENTIFIER.test(name)) return name;
 
   return `'${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }

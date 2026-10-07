@@ -63,7 +63,7 @@ describe('generateTypes', () => {
 
   it('describes a loop whose body declares nothing', () => {
     expect(generateTypes('<TMPL_LOOP NAME="rows">text</TMPL_LOOP>', { name: 'Page' })).toContain(
-      'rows?: RowSource<Record<string, never>>;'
+      'rows?: RowSource<{}>;'
     );
   });
 
@@ -147,5 +147,66 @@ describe('generateModule', () => {
 
   it('ends with a newline', () => {
     expect(generateModule([{ name: 'Page', source: '<TMPL_VAR NAME="x">' }]).endsWith('\n')).toBe(true);
+  });
+});
+
+describe('interface names', () => {
+  const loop = '<TMPL_LOOP NAME="rows"><TMPL_VAR NAME="c"></TMPL_LOOP>';
+
+  it('rejects a name that is not an identifier', () => {
+    expect(() => generateTypes('x', { name: 'Page-Data' })).toThrow(/not a valid TypeScript identifier/);
+    expect(() => generateModule([{ name: '1Page', source: 'x' }])).toThrow(/not a valid TypeScript identifier/);
+  });
+
+  it('fails when two entries share a name, naming both files', () => {
+    expect(() =>
+      generateModule([
+        { name: 'IndexData', source: 'a', filename: 'admin/index.tmpl' },
+        { name: 'IndexData', source: 'b', filename: 'shop/index.tmpl' }
+      ])
+    ).toThrow(/admin\/index\.tmpl.*shop\/index\.tmpl/);
+  });
+
+  it('fails when a split row name collides with another entry', () => {
+    expect(() =>
+      generateModule(
+        [
+          { name: 'Page', source: loop, filename: 'a.tmpl' },
+          { name: 'PageRowsRow', source: 'x', filename: 'b.tmpl' }
+        ],
+        { split: true }
+      )
+    ).toThrow(/PageRowsRow.*a\.tmpl.*b\.tmpl/);
+  });
+
+  it('fails when two loops fold to the same split row name', () => {
+    const source =
+      '<TMPL_LOOP NAME="foo-bar"><TMPL_VAR NAME="c"></TMPL_LOOP><TMPL_LOOP NAME="foo_bar"><TMPL_VAR NAME="c"></TMPL_LOOP>';
+
+    expect(() => generateTypes(source, { name: 'Page', split: true })).toThrow(/PageFooBarRow/);
+  });
+
+  it('emits each name once for distinct entries', () => {
+    const output = generateModule(
+      [
+        { name: 'A', source: loop },
+        { name: 'B', source: loop }
+      ],
+      { split: true }
+    );
+
+    expect(output.match(/export interface /g)).toHaveLength(4);
+  });
+
+  it('types an empty loop body the same inline and split', () => {
+    const source = '<TMPL_LOOP NAME="rows">text</TMPL_LOOP>';
+    const inline = generateTypes(source, { name: 'Page' });
+    const split = generateTypes(source, { name: 'Page', split: true });
+
+    expect(inline).toContain('rows?: RowSource<{}>;');
+    expect(split).toContain('rows?: RowSource<PageRowsRow>;');
+    expect(split).toContain('export interface PageRowsRow {}');
+    expect(inline).not.toContain('Record<string, never>');
+    expect(split).not.toContain('Record<string, never>');
   });
 });

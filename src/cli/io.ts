@@ -7,7 +7,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, extname, join } from 'node:path';
+import { basename, dirname, extname, join, relative } from 'node:path';
 import type { CommandIO } from './run.js';
 
 /**
@@ -42,7 +42,7 @@ export function nodeIO(write: (text: string) => void, writeError: (text: string)
     listFiles: (path) =>
       readdirSync(path, { recursive: true, withFileTypes: true })
         .filter((entry) => entry.isFile())
-        .map((entry) => join(entry.parentPath, entry.name).slice(path.length + 1)),
+        .map((entry) => relative(path, join(entry.parentPath, entry.name))),
 
     join,
     stem: (path) => basename(path, extname(path)),
