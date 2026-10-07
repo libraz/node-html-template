@@ -78,7 +78,7 @@ const JS_ESCAPE_REGEX = /[\\"'\n\r\u2028\u2029]/g;
  * Escape JavaScript string
  * Compatible with Perl HTML::Template ESCAPE=JS
  *
- * Escapes: \ ' " \n \r U+2028 U+2029
+ * Escapes: \ ' " \n \r; U+2028 becomes `\n` and U+2029 becomes `\n\n`
  *
  * @param str - String to escape
  * @returns JavaScript-escaped string
@@ -98,13 +98,22 @@ export function escapeJs(str: string): string {
 // URL Escape
 // ============================================================================
 
+/** Characters Perl's ESCAPE=URL leaves as-is */
+const URL_SAFE_REGEX = /^[A-Za-z0-9_.-]*$/;
+
+/** A surrogate half with no partner */
+const LONE_SURROGATE_REGEX = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/** Characters the built-in URI encoder leaves raw but Perl encodes */
+const URL_EXTRA_REGEX = /[!'()*~]/g;
+
 /**
  * Escape URL component
  * Compatible with Perl HTML::Template ESCAPE=URL
  *
- * Encodes all characters except: A-Z a-z 0-9 _ . -
- *
- * Uses percent-encoding (e.g., space becomes %20)
+ * Percent-encodes every UTF-8 byte except A-Z a-z 0-9 _ . - with uppercase
+ * hex. A lone surrogate is encoded as U+FFFD (%EF%BF%BD), the same
+ * substitution a UTF-8 output stream applies, so the function never throws.
  *
  * @param str - String to URL-escape
  * @returns URL-escaped string
@@ -116,20 +125,13 @@ export function escapeJs(str: string): string {
  * ```
  */
 export function escapeUrl(str: string): string {
-  // Use Node.js built-in encodeURIComponent (fastest)
-  // It's more aggressive than needed, so we need to restore safe chars
-  let encoded = encodeURIComponent(str);
-
-  // encodeURIComponent encodes some chars we want to keep: - _ . ~
-  // Perl HTML::Template only keeps: - _ .
-  // So we need to restore those and encode ~
-  encoded = encoded
-    .replace(/%2D/g, '-') // Restore -
-    .replace(/%5F/g, '_') // Restore _
-    .replace(/%2E/g, '.') // Restore .
-    .replace(/~/g, '%7E'); // Encode ~ (encodeURIComponent keeps it)
-
-  return encoded;
+  if (URL_SAFE_REGEX.test(str)) {
+    return str;
+  }
+  return encodeURIComponent(str.replace(LONE_SURROGATE_REGEX, '\uFFFD')).replace(
+    URL_EXTRA_REGEX,
+    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`
+  );
 }
 
 // ============================================================================
@@ -143,6 +145,7 @@ export function escapeUrl(str: string): string {
  * @param str - String to escape
  * @param escapeType - Type of escaping to apply
  * @returns Escaped string
+ * @throws {Error} For a mode outside {@link EscapeType}
  *
  * @example
  * ```ts
@@ -170,7 +173,7 @@ export function escapeValue(str: string, escapeType: EscapeType): string {
     case 'none':
       return str;
     default:
-      // Exhaustive check - TypeScript ensures this never happens
-      return str;
+      // Fail closed: every compile path validates the mode, so this is a bug
+      throw new Error(`Unknown escape mode '${String(escapeType satisfies never)}'`);
   }
 }

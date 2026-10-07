@@ -69,11 +69,42 @@ describe('ESCAPE=url', () => {
     expect(compile('<TMPL_VAR NAME="x" ESCAPE="url">', raw).render({ x: 'abc_123.xyz-test' })).toBe('abc_123.xyz-test');
   });
 
-  it('percent-encodes non-ASCII text', () => {
-    const output = compile('<TMPL_VAR NAME="x" ESCAPE="url">', raw).render({ x: 'こんにちは' });
+  it('percent-encodes non-ASCII text as UTF-8 bytes', () => {
+    expect(compile('<TMPL_VAR NAME="x" ESCAPE="url">', raw).render({ x: 'こんにちは' })).toBe(
+      '%E3%81%93%E3%82%93%E3%81%AB%E3%81%A1%E3%81%AF'
+    );
+  });
 
-    expect(output).not.toBe('こんにちは');
-    expect(output).toContain('%');
+  it('percent-encodes the characters that could close a quoted attribute', () => {
+    expect(compile('<TMPL_VAR NAME="x" ESCAPE="url">', raw).render({ x: '\'()*!~"<>' })).toBe(
+      '%27%28%29%2A%21%7E%22%3C%3E'
+    );
+  });
+
+  it('encodes a lone surrogate as U+FFFD instead of throwing', () => {
+    const template = compile('<TMPL_VAR NAME="x" ESCAPE="url">', raw);
+
+    expect(template.render({ x: 'a\uD800b' })).toBe('a%EF%BF%BDb');
+    expect(template.render({ x: '\uDC00' })).toBe('%EF%BF%BD');
+    expect(template.render({ x: '😀' })).toBe('%F0%9F%98%80');
+  });
+
+  it('matches the byte-wise Perl encoding for every UTF-16 code unit', () => {
+    // Perl: s/([^a-zA-Z0-9_.\-])/sprintf('%%%02X', ord $1)/eg over the UTF-8 bytes.
+    const encoder = new TextEncoder();
+    const perl = (s: string) =>
+      Array.from(encoder.encode(s), (b) =>
+        /[A-Za-z0-9_.-]/.test(String.fromCharCode(b))
+          ? String.fromCharCode(b)
+          : `%${b.toString(16).toUpperCase().padStart(2, '0')}`
+      ).join('');
+    const template = compile('<TMPL_VAR NAME="x" ESCAPE="url">', raw);
+    const units = Array.from({ length: 0x10000 }, (_, i) => String.fromCharCode(i)).join('');
+
+    const output = template.render({ x: units });
+
+    expect(output).toMatch(/^([A-Za-z0-9_.-]|%[0-9A-F]{2})*$/);
+    expect(output).toBe(perl(units));
   });
 });
 
