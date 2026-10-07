@@ -1,15 +1,11 @@
 /**
  * Template syntax parity
  *
- * The asset being ported is the template syntax, not Perl's API. This runs the
- * subset of the recorded Perl cases that exercise syntax alone — no
- * introspection, no CGI association, no param() semantics — through the new
- * API configured to match Perl's defaults, and checks the rendered output byte
- * for byte against what Perl produced.
- *
- * Cases outside that subset are covered by the Perl-compatibility suite
- * against the legacy API; running them here would pin Perl's API quirks to the
- * new surface, which is exactly what this port is moving away from.
+ * Every recorded Perl case is asserted against the new API configured to match
+ * Perl's defaults: ok:1 cases must render byte for byte what Perl produced,
+ * ok:0 cases must throw. A case is left out only when it appears in
+ * EXCLUDED with a reason; cases that exercise Perl's own API (param(),
+ * associate, query, get, clear) have no counterpart here and are listed there.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -44,55 +40,45 @@ interface Golden {
 }
 
 /**
- * Options whose meaning carries over to the new API unchanged.
- *
- * A case using anything else is about Perl's API rather than its syntax.
+ * The only cases not asserted, each with the reason it has no counterpart.
  */
-const SYNTAX_OPTIONS = new Set([
-  'strict',
-  'default_escape',
-  'vanguard_compatibility_mode',
-  'no_includes',
-  'max_includes',
-  'search_path_on_include',
-  'die_on_missing_include',
-  'case_sensitive',
-  'global_vars',
-  'loop_context_vars'
-]);
+const EXCLUDED: Record<string, string> = {
+  'associate-fills-top-level': 'Perl associate option (CGI object lookup); the new API has no association',
+  'associate-case-insensitive': 'Perl associate option (CGI object lookup); the new API has no association',
+  'associate-not-visible-in-loop': 'Perl associate option (CGI object lookup); the new API has no association',
+  'query-top-level-names': 'Perl query() introspection; the new API exposes shape instead',
+  'param-lists-top-level-names': 'Perl param() name listing; the new API exposes shape instead',
+  'query-loop-names': 'Perl query(loop) introspection; the new API exposes shape instead',
+  'query-loop-names-nested': 'Perl query(loop) introspection; the new API exposes shape instead',
+  'query-name-path': 'Perl query(name) introspection; the new API exposes shape instead',
+  'query-name-loop-scoped-without-path': 'Perl query(name) introspection; the new API exposes shape instead',
+  'get-nonexistent-param-dies': 'Perl param() getter on a stateful object; render takes data directly',
+  'loop-set-with-scalar-dies':
+    'Perl rejects a non-array value for a loop at param() time; render treats a scalar loop value as an empty loop and does not throw',
+  'if-on-empty-loop':
+    'Perl rejects an array ref for a name only used by TMPL_IF at param() time; render accepts it and takes the else branch',
+  'clear-params-resets': 'Perl clear_params() on a stateful object; render takes data directly'
+};
 
 const compatCases = cases as CompatCase[];
 const compatGoldens = goldens as Record<string, Golden>;
 
-/**
- * Decide whether a case exercises template syntax alone.
- *
- * @param compatCase - Case definition
- * @returns True when the case belongs in this suite
- */
-function isSyntaxCase(compatCase: CompatCase): boolean {
-  const golden = compatGoldens[compatCase.id];
-  if (!golden?.ok) return false;
-
-  if (compatCase.query || compatCase.paramlist || compatCase.queryloop || compatCase.queryname) return false;
-  if (compatCase.get || compatCase.clear || compatCase.associate) return false;
-
-  return Object.keys(compatCase.opts ?? {}).every((key) => SYNTAX_OPTIONS.has(key));
-}
-
-const syntaxCases = compatCases.filter(isSyntaxCase);
-
 describe('template syntax parity with Perl HTML::Template 2.98', () => {
-  it('covers a meaningful share of the recorded cases', () => {
-    expect(syntaxCases.length).toBeGreaterThan(40);
+  it('has a golden for every case and no stale exclusion', () => {
+    expect(compatCases.map((c) => c.id).sort()).toEqual(Object.keys(compatGoldens).sort());
+    expect(Object.keys(EXCLUDED).filter((id) => !(id in compatGoldens))).toEqual([]);
   });
 
-  for (const compatCase of syntaxCases) {
-    const golden = compatGoldens[compatCase.id];
+  for (const compatCase of compatCases) {
+    const golden = compatGoldens[compatCase.id] as Golden;
     const title = compatCase.note ? `${compatCase.id} - ${compatCase.note}` : compatCase.id;
+    const reason = EXCLUDED[compatCase.id];
+
+    if (reason !== undefined) continue;
 
     it(title, () => {
-      expect(render(compatCase)).toBe(golden?.out);
+      if (golden.ok) expect(render(compatCase)).toBe(golden.out);
+      else expect(() => render(compatCase)).toThrow();
     });
   }
 });
@@ -128,6 +114,8 @@ function render(compatCase: CompatCase): string {
   });
 
   return template.render(compatCase.params ?? {}, {
+    // Perl dies on parameters the template never declares unless told not to.
+    strictData: opts.die_on_bad_params !== 0,
     loopContextVars: Boolean(opts.loop_context_vars ?? 0)
   });
 }
