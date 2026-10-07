@@ -7,7 +7,7 @@
  * used in a server.
  */
 
-import { bench, describe } from 'vitest';
+import { test } from 'vitest';
 import { compile, memoryLoader, render } from '../src/index.js';
 
 const SIMPLE = 'Hello <TMPL_VAR NAME="name">!';
@@ -38,27 +38,27 @@ const COMPLEX_DATA = {
   ]
 };
 
-describe('compile', () => {
-  bench('simple template', () => {
-    void compile(SIMPLE);
-  });
-
-  bench('complex template', () => {
-    void compile(COMPLEX);
-  });
-
-  bench('template with three includes', () => {
-    void compile('<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl">', {
-      loader: memoryLoader({
-        'a.tmpl': '<TMPL_VAR NAME="a"><TMPL_INCLUDE NAME="c.tmpl">',
-        'b.tmpl': '<TMPL_VAR NAME="b">',
-        'c.tmpl': '<TMPL_VAR NAME="c">'
-      })
-    });
-  });
+test('compile', async ({ bench }) => {
+  await bench.compare(
+    bench('simple template', () => {
+      void compile(SIMPLE);
+    }),
+    bench('complex template', () => {
+      void compile(COMPLEX);
+    }),
+    bench('template with three includes', () => {
+      void compile('<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl">', {
+        loader: memoryLoader({
+          'a.tmpl': '<TMPL_VAR NAME="a"><TMPL_INCLUDE NAME="c.tmpl">',
+          'b.tmpl': '<TMPL_VAR NAME="b">',
+          'c.tmpl': '<TMPL_VAR NAME="c">'
+        })
+      });
+    })
+  );
 });
 
-describe('render', () => {
+test('render', async ({ bench }) => {
   const simple = compile(SIMPLE);
   const complex = compile(COMPLEX);
   const loop = compile('<TMPL_LOOP NAME="items"><TMPL_VAR NAME="item"></TMPL_LOOP>');
@@ -74,85 +74,82 @@ describe('render', () => {
     inner: Array.from({ length: 10 }, (__, j) => ({ value: `${i}-${j}` }))
   }));
 
-  bench('simple template', () => {
-    simple.render({ name: 'World' });
-  });
-
-  bench('complex template', () => {
-    complex.render(COMPLEX_DATA);
-  });
-
-  bench('loop, 10 rows', () => {
-    loop.render({ items: rows.slice(0, 10) });
-  });
-
-  bench('loop, 100 rows', () => {
-    loop.render({ items: rows });
-  });
-
-  bench('nested loops, 10x10', () => {
-    nested.render({ outer: grid });
-  });
-
-  bench('conditionals', () => {
-    conditionals.render({ show: true, hide: false, content: 'Content', footer: 'Footer' });
-  });
+  await bench.compare(
+    bench('simple template', () => {
+      simple.render({ name: 'World' });
+    }),
+    bench('complex template', () => {
+      complex.render(COMPLEX_DATA);
+    }),
+    bench('loop, 10 rows', () => {
+      loop.render({ items: rows.slice(0, 10) });
+    }),
+    bench('loop, 100 rows', () => {
+      loop.render({ items: rows });
+    }),
+    bench('nested loops, 10x10', () => {
+      nested.render({ outer: grid });
+    }),
+    bench('conditionals', () => {
+      conditionals.render({ show: true, hide: false, content: 'Content', footer: 'Footer' });
+    })
+  );
 });
 
-describe('escaping', () => {
+test('escaping', async ({ bench }) => {
   const html = compile('<TMPL_VAR NAME="v" ESCAPE="HTML">');
   const url = compile('<a href="?q=<TMPL_VAR NAME="v" ESCAPE="URL">">Link</a>');
   const js = compile('<script>var x = "<TMPL_VAR NAME="v" ESCAPE="JS">";</script>');
   const unescaped = compile('<TMPL_VAR NAME="v">', { defaultEscape: 'none' });
 
-  bench('html', () => {
-    html.render({ v: '<script>alert("XSS")</script>' });
-  });
-
-  bench('url', () => {
-    url.render({ v: 'hello world & stuff' });
-  });
-
-  bench('js', () => {
-    js.render({ v: 'Some "quoted" string' });
-  });
-
-  bench('none', () => {
-    unescaped.render({ v: '<script>alert("XSS")</script>' });
-  });
+  await bench.compare(
+    bench('html', () => {
+      html.render({ v: '<script>alert("XSS")</script>' });
+    }),
+    bench('url', () => {
+      url.render({ v: 'hello world & stuff' });
+    }),
+    bench('js', () => {
+      js.render({ v: 'Some "quoted" string' });
+    }),
+    bench('none', () => {
+      unescaped.render({ v: '<script>alert("XSS")</script>' });
+    })
+  );
 });
 
-describe('compile per render', () => {
+test('compile per render', async ({ bench }) => {
   // The cost the compile/render split exists to remove: rendering the same
   // template ten times without keeping the compiled form.
-  bench('render() ten times', () => {
-    for (let i = 0; i < 10; i += 1) {
-      render(SIMPLE, { name: 'World' });
-    }
-  });
-
-  bench('compile once, render ten times', () => {
-    const template = compile(SIMPLE);
-    for (let i = 0; i < 10; i += 1) {
-      template.render({ name: 'World' });
-    }
-  });
+  await bench.compare(
+    bench('render() ten times', () => {
+      for (let i = 0; i < 10; i += 1) {
+        render(SIMPLE, { name: 'World' });
+      }
+    }),
+    bench('compile once, render ten times', () => {
+      const template = compile(SIMPLE);
+      for (let i = 0; i < 10; i += 1) {
+        template.render({ name: 'World' });
+      }
+    })
+  );
 });
 
-describe('percent variables', () => {
+test('percent variables', async ({ bench }) => {
   const tags = compile('Hello <TMPL_VAR NAME="name">!');
   const percent = compile('Hello %name%!', { legacy: { percentVars: true } });
   const mixed = compile('%greeting% <TMPL_VAR NAME="name">!', { legacy: { percentVars: true } });
 
-  bench('TMPL_VAR only', () => {
-    tags.render({ name: 'World' });
-  });
-
-  bench('%VAR% only', () => {
-    percent.render({ name: 'World' });
-  });
-
-  bench('both forms', () => {
-    mixed.render({ greeting: 'Hello', name: 'World' });
-  });
+  await bench.compare(
+    bench('TMPL_VAR only', () => {
+      tags.render({ name: 'World' });
+    }),
+    bench('%VAR% only', () => {
+      percent.render({ name: 'World' });
+    }),
+    bench('both forms', () => {
+      mixed.render({ greeting: 'Hello', name: 'World' });
+    })
+  );
 });

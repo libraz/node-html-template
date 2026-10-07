@@ -6,7 +6,7 @@
  * only if the difference is worth two implementations.
  */
 
-import { bench, describe } from 'vitest';
+import { test } from 'vitest';
 import { compile } from '../src/index.js';
 
 /**
@@ -46,30 +46,30 @@ const DEEP_DATA = {
   }))
 };
 
-describe('flat loop, 200 rows', () => {
-  bench('render', () => {
-    counter.write(FLAT.render(FLAT_DATA));
-  });
-
-  bench('renderTo a sink', () => {
-    FLAT.renderTo(counter, FLAT_DATA);
-  });
-
-  bench('renderChunks, fully consumed', () => {
-    for (const chunk of FLAT.renderChunks(FLAT_DATA)) counter.write(chunk);
-  });
+test('flat loop, 200 rows', async ({ bench }) => {
+  await bench.compare(
+    bench('render', () => {
+      counter.write(FLAT.render(FLAT_DATA));
+    }),
+    bench('renderTo a sink', () => {
+      FLAT.renderTo(counter, FLAT_DATA);
+    }),
+    bench('renderChunks, fully consumed', () => {
+      for (const chunk of FLAT.renderChunks(FLAT_DATA)) counter.write(chunk);
+    })
+  );
 });
 
-describe('four nested loops, 625 leaves', () => {
-  bench('render', () => {
-    counter.write(DEEP.render(DEEP_DATA));
-  });
-
-  bench('renderTo a sink', () => {
-    DEEP.renderTo(counter, DEEP_DATA);
-  });
-
-  bench('renderChunks, fully consumed', () => {
-    for (const chunk of DEEP.renderChunks(DEEP_DATA)) counter.write(chunk);
-  });
+test('four nested loops, 625 leaves', async ({ bench }) => {
+  await bench.compare(
+    bench('render', () => {
+      counter.write(DEEP.render(DEEP_DATA));
+    }),
+    bench('renderTo a sink', () => {
+      DEEP.renderTo(counter, DEEP_DATA);
+    }),
+    bench('renderChunks, fully consumed', () => {
+      for (const chunk of DEEP.renderChunks(DEEP_DATA)) counter.write(chunk);
+    })
+  );
 });
