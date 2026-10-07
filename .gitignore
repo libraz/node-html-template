@@ -48,3 +48,6 @@ test-cache/
 # Claude Code
 .claude/
 CLAUDE.md
+
+# Audit work orders and finding store (local)
+audits/
