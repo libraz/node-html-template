@@ -1,8 +1,10 @@
 # Template syntax
 
 The syntax is Perl HTML::Template 2.98's, unchanged. A template written for the
-Perl module parses here and produces the same output, with one deliberate
-exception covered under [escaping](#escaping).
+Perl module parses here and produces the same output, except for two defaults
+that deliberately differ: [escaping](#escaping) and
+[name matching](#name-matching). [Coming from Perl](from-perl.md) lists them
+all.
 
 ## Tag forms
 
@@ -58,8 +60,8 @@ A default is written out exactly as given and is never escaped.
 | Value | Effect |
 | --- | --- |
 | `html` or `1` | `& " ' < >` become entities |
-| `url` | percent-encoding |
-| `js` | backslash escapes for `\ ' "`, line breaks and U+2028/U+2029 |
+| `url` | every UTF-8 byte outside `A-Z a-z 0-9 _ . -` becomes `%XX`; an unpaired surrogate becomes `%EF%BF%BD` |
+| `js` | backslash escapes for `\ ' "`, `\n` and `\r`; U+2028 becomes `\n` and U+2029 becomes `\n\n` |
 | `none` or `0` | written through untouched |
 
 Any other value is a parse error.
@@ -76,8 +78,8 @@ Any other value is a parse error.
 <TMPL_UNLESS NAME="empty">there is something here</TMPL_UNLESS>
 ```
 
-`TMPL_ELSE` works with both, and either may be closed with `</TMPL_IF>` or
-`</TMPL_UNLESS>`.
+`TMPL_ELSE` works with both. Each block is closed by its own tag, `</TMPL_IF>`
+or `</TMPL_UNLESS>`; closing one with the other is a parse error.
 
 Truth follows Perl rather than JavaScript, because that is what the templates
 were written against:
@@ -85,7 +87,7 @@ were written against:
 | Value | Truth |
 | --- | --- |
 | `undefined`, `null`, `false` | false |
-| `0`, `''`, `'0'` | false |
+| `0`, `0n`, `''`, `'0'` | false |
 | `[]` | false |
 | anything else | true |
 
@@ -121,7 +123,7 @@ With `loopContextVars: true` on a render, each iteration also gets:
 | Name | Value |
 | --- | --- |
 | `__first__` | `1` on the first iteration, otherwise `0` |
-| `__last__` | `1` on the last iteration, otherwise `''` |
+| `__last__` | `1` on the last iteration, `''` on the first of several, `0` in between |
 | `__inner__` | `1` when neither first nor last, otherwise `0` |
 | `__outer__` | `1` on the first and last iterations, otherwise `0` |
 | `__odd__` | `1` on odd iterations, otherwise `''` |
@@ -152,11 +154,11 @@ Include handling is configured at compile time:
 
 ```typescript
 compile(source, {
-  loader: nodeFileLoader({ paths: ['./views'] }),
+  // searchAllPaths: true resolves from the configured paths, not the referrer
+  loader: nodeFileLoader({ paths: ['./views'], searchAllPaths: false }),
   includes: {
     maxDepth: 10,          // zero or less means unlimited
-    onMissing: 'throw',    // or 'ignore'
-    searchAllPaths: false  // resolve from the configured paths, not the referrer
+    onMissing: 'throw'     // or 'ignore'
   }
 });
 ```

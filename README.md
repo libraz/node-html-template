@@ -99,9 +99,12 @@ compile('<TMPL_VAR NAME="x">').render({ x: '<b>' }); // '&lt;b&gt;'
 compile('<TMPL_VAR NAME="x">', { defaultEscape: 'none' }).render({ x: '<b>' }); // '<b>'
 ```
 
-This is the one place the library deliberately differs from Perl, which escapes
-nothing unless told to. Templates that already write `ESCAPE="html"` keep
-working; templates that relied on raw output need `defaultEscape: 'none'`.
+Two defaults deliberately differ from Perl and change what renders: escaping,
+which Perl does not do unless told to, and case-sensitive name matching, which
+`caseSensitive: false` turns back into Perl's folding. Templates that already
+write `ESCAPE="html"` keep working; templates that relied on raw output need
+`defaultEscape: 'none'`. [Coming from Perl](docs/en/from-perl.md) has the full
+list.
 
 ## Generated types
 

@@ -1,6 +1,6 @@
 # テンプレート構文
 
-構文は Perl HTML::Template 2.98 のものをそのまま採用しています。Perl モジュール向けに書かれたテンプレートはここでもパースでき、同じ出力になります。意図的な例外は[エスケープ](#エスケープ)の 1 点だけです。
+構文は Perl HTML::Template 2.98 のものをそのまま採用しています。Perl モジュール向けに書かれたテンプレートはここでもパースでき、同じ出力になります。出力が変わる既定値のうち意図的に異なるのは、[エスケープ](#エスケープ)と[名前の一致](#名前の一致)の 2 点です。全体の一覧は [Perl HTML::Template からの移行](from-perl.md)にあります。
 
 ## タグの書き方
 
@@ -51,8 +51,8 @@
 | 値 | 効果 |
 | --- | --- |
 | `html` / `1` | `& " ' < >` を実体参照に |
-| `url` | パーセントエンコード |
-| `js` | `\ ' "`・改行・U+2028/U+2029 をバックスラッシュエスケープ |
+| `url` | `A-Z a-z 0-9 _ . -` 以外の UTF-8 バイトをすべて `%XX` に。対になっていないサロゲートは `%EF%BF%BD` に |
+| `js` | `\ ' "`・`\n`・`\r` をバックスラッシュエスケープ。U+2028 は `\n`、U+2029 は `\n\n` に |
 | `none` / `0` | そのまま出力 |
 
 これ以外の値はパースエラーになります。
@@ -69,14 +69,14 @@
 <TMPL_UNLESS NAME="empty">there is something here</TMPL_UNLESS>
 ```
 
-`TMPL_ELSE` は両方で使えます。閉じタグは `</TMPL_IF>` でも `</TMPL_UNLESS>` でも構いません。
+`TMPL_ELSE` は両方で使えます。各ブロックは自身のタグ（`</TMPL_IF>` または `</TMPL_UNLESS>`）で閉じます。もう一方で閉じるとパースエラーになります。
 
 真偽判定は JavaScript ではなく Perl に従います。テンプレートがそちらを前提に書かれているためです。
 
 | 値 | 判定 |
 | --- | --- |
 | `undefined` / `null` / `false` | 偽 |
-| `0` / `''` / `'0'` | 偽 |
+| `0` / `0n` / `''` / `'0'` | 偽 |
 | `[]` | 偽 |
 | それ以外 | 真 |
 
@@ -109,7 +109,7 @@ compile(source, { globalVars: true });
 | 名前 | 値 |
 | --- | --- |
 | `__first__` | 最初の反復で `1`、それ以外は `0` |
-| `__last__` | 最後の反復で `1`、それ以外は `''` |
+| `__last__` | 最後の反復で `1`、複数ある反復の最初は `''`、その間は `0` |
 | `__inner__` | 最初でも最後でもないとき `1`、それ以外は `0` |
 | `__outer__` | 最初と最後の反復で `1`、それ以外は `0` |
 | `__odd__` | 奇数番目で `1`、それ以外は `''` |
@@ -136,11 +136,11 @@ compile(source, { globalVars: true });
 
 ```typescript
 compile(source, {
-  loader: nodeFileLoader({ paths: ['./views'] }),
+  // searchAllPaths: true で、参照元ではなく設定したパスから探す
+  loader: nodeFileLoader({ paths: ['./views'], searchAllPaths: false }),
   includes: {
     maxDepth: 10,          // 0 以下で無制限
-    onMissing: 'throw',    // または 'ignore'
-    searchAllPaths: false  // 参照元ではなく設定したパスから探す
+    onMissing: 'throw'     // または 'ignore'
   }
 });
 ```

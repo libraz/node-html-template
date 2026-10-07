@@ -38,8 +38,12 @@ export interface PageData {
 | `--required` | Make every property required |
 | `--split` | Give each loop's row type its own named interface |
 | `--ext <list>` | Extensions to pick up when searching a directory (default `.tmpl,.html`) |
-| `--suffix <s>` | Appended to each interface name (default `Data`) |
+| `--suffix <s>` | Appended to each interface name (default `Data`); the result must be a valid identifier |
 | `--import <mod>` | Module the value types are imported from |
+
+Two templates with the same file stem produce the same interface name, so the
+command exits 1 naming both files. It also exits 1 when an interface name,
+`--suffix` included, is not a valid identifier.
 
 ## Using the result
 
@@ -64,6 +68,9 @@ correct calls.
 
 **A loop becomes `RowSource<Row>`**, which accepts an array of rows or a
 function returning one, matching what the runtime accepts.
+
+**A loop whose body reads no name is `RowSource<{}>`**, inline and with
+`--split` alike: any row the runtime renders is accepted.
 
 **Row types are inlined** unless `--split` is passed, which is the readable
 choice for shallow templates and the unreadable one past two levels.

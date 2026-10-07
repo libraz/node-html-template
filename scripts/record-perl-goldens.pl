@@ -11,6 +11,11 @@
 #
 # A case that dies records ok => 0 plus Perl's message. The message is kept for
 # documentation only; the suite asserts that the port fails, not how it words it.
+#
+# The suite asserts every case except those listed in EXCLUDED in
+# tests/core/syntax-parity.test.ts: cases that exercise Perl's own API
+# (param(), associate, query(), clear_params()), and two whose behaviour
+# differs by design.
 
 use strict;
 use warnings;

@@ -90,7 +90,7 @@ compile('<TMPL_VAR NAME="x">').render({ x: '<b>' }); // '&lt;b&gt;'
 compile('<TMPL_VAR NAME="x">', { defaultEscape: 'none' }).render({ x: '<b>' }); // '<b>'
 ```
 
-ここは Perl と意図的に異なる唯一の点です。Perl は指示がない限り何もエスケープしません。すでに `ESCAPE="html"` を書いているテンプレートはそのまま動きます。生の出力に依存していたテンプレートには `defaultEscape: 'none'` が必要です。
+Perl と意図的に異なり、出力が変わる既定値は 2 つあります。1 つはエスケープで、Perl は指示がない限り何もエスケープしません。もう 1 つは名前の大文字小文字を区別することで、`caseSensitive: false` を指定すれば Perl と同じく区別しなくなります。すでに `ESCAPE="html"` を書いているテンプレートはそのまま動きます。生の出力に依存していたテンプレートには `defaultEscape: 'none'` が必要です。全体の一覧は [Perl HTML::Template からの移行](docs/ja/from-perl.md)を参照してください。
 
 ## 型生成
 

@@ -2,7 +2,7 @@
 
 持ち越す価値がある資産はテンプレート構文であって、その周りの API ではありません。テンプレートはそのまま移せますが、描画するコードは移せません。
 
-構文は Perl HTML::Template 2.98 の実出力をケース単位で記録したものと照合しています。あちらである動きをするテンプレートは、ここでも同じ動きをします。
+構文は、Perl HTML::Template 2.98 の実出力を記録したものと照合しています。記録したケースはすべて検証対象ですが、Perl 自身の API（`param()`・`associate`・`query()`・`clear_params()`）を使うケースはこちらに対応物がないため除外しており、挙動が異なる 2 件は[残っている相違](#残っている相違)にまとめています。`TMPL_COMMENT` と `TMPL_NOTE` には記録したケースがありません。
 
 ## API
 
@@ -48,8 +48,8 @@ const html = template.render({ title: 'Hello', items });
 | --- | --- |
 | `filename` | `Environment#compileFile(name)` |
 | `scalarref` / `arrayref` / `filehandle` / `type` + `source` | `compile(source)` |
-| `path` | `IncludeOptions.paths`、またはローダーの `paths` |
-| `search_path_on_include` | `IncludeOptions.searchAllPaths` |
+| `path` | `nodeFileLoader` の `paths` |
+| `search_path_on_include` | `nodeFileLoader` の `searchAllPaths` |
 | `max_includes` | `IncludeOptions.maxDepth` |
 | `die_on_missing_include` | `IncludeOptions.onMissing` |
 | `no_includes` | `includes: false` |
@@ -77,6 +77,13 @@ Perl が受け付けていたもののこのパッケージが実装していな
 ```typescript
 template.render(data, { resolve: (name) => request.query[name] });
 ```
+
+## 残っている相違
+
+- **ループ名にスカラーを渡す**と、空のループとして描画されます。Perl は値を設定した時点で die します。
+- **`TMPL_IF` でしか使われない名前に配列を渡す**ことができ、真偽は[テンプレート構文](template-syntax.md#tmpl_if-と-tmpl_unless)の判定規則に従います。空配列なら else 側に進みます。Perl は値を設定した時点でこれを拒否します。
+- **タグの閉じ方に寛容です。** 最後の属性の直後に置いた自己終了のスラッシュ（`<TMPL_VAR x/>`）と、同じく直後に置いたコメントの閉じ（`<!-- TMPL_VAR x-->`）を受け付けます。Perl は同じようには扱いません。
+- **`<` の直後に空白があると文字列扱いです。** `< TMPL_VAR x>` は Perl と同じくただの文字列です。閉じの `>` の前の空白は問題ありません。
 
 ## 変わっていないもの
 

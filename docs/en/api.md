@@ -33,13 +33,13 @@ rendered more than once — this reparses every time.
 | --- | --- | --- |
 | `filename` | — | Name reported in errors and used to resolve relative includes |
 | `strict` | `true` | Treat a malformed `TMPL_` tag as an error rather than as text |
-| `defaultEscape` | `'html'` | Escape applied to a tag with no `ESCAPE` attribute |
+| `defaultEscape` | `'html'` | Escape applied to a tag with no `ESCAPE` attribute: `html`, `url`, `js` or `none`, in any case; anything else throws |
 | `caseSensitive` | `true` | Whether names keep their case when matched |
 | `globalVars` | `false` | Let a name unresolved in a loop fall back to enclosing scopes |
 | `includes` | `true` | Include handling; `false` rejects any `TMPL_INCLUDE` |
 | `filters` | `[]` | Transformations applied to the source text before parsing |
 | `legacy.percentVars` | `false` | Substitute `%NAME%` as well as tags |
-| `loader` | — | Where included templates are read from |
+| `loader` | — | Where included templates are read from. There is no default: a template with `TMPL_INCLUDE` needs one |
 
 Everything here affects what a template *is*, which is why it is fixed at
 compile time: a name that exists under one setting and not under another cannot
@@ -47,12 +47,12 @@ be decided per render.
 
 ### IncludeOptions
 
-Passed as `includes` when more than `true` is needed.
+Passed as `includes` when more than `true` is needed. Where an included name
+is looked up belongs to the loader: for files, `nodeFileLoader`'s `paths` and
+`searchAllPaths`.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `paths` | `[]` | Directories searched for included templates |
-| `searchAllPaths` | `false` | Search the configured paths rather than the referring template's directory |
 | `maxDepth` | `10` | Maximum nesting depth; zero or less means unlimited |
 | `onMissing` | `'throw'` | What to do about an include naming a template that does not exist |
 
@@ -108,11 +108,16 @@ readonly filename: string | undefined
 | --- | --- | --- |
 | `strictData` | `false` | Reject data keys the template never declares |
 | `loopContextVars` | `false` | Provide `__first__` and friends inside loops |
-| `memoizeLazy` | `true` | Call a function value at most once per render |
+| `memoizeLazy` | `true` | Call a function value at most once per render, wherever it appears |
 | `resolve` | — | Fallback for top-level names absent from the data |
 
 `resolve` is consulted only at the top level, never inside a loop iteration: a
 name missing from a row is missing, not something to go looking for elsewhere.
+
+With `memoizeLazy` on, a function value is called once however often it is
+referenced: at the top level, in loop rows, and as a value `resolve` returns.
+`resolve` itself is called once per name. With it off, both are called on
+every reference.
 
 ## Environment
 
@@ -140,7 +145,14 @@ new Environment(options?: EnvironmentOptions)
 | `clearCache()` | `void` |
 | `cacheSize` | `number` |
 
-Per-call options override the environment's defaults.
+Per-call options override the environment's defaults. That includes `loader`,
+which the file methods honour for the template itself, its includes and the
+cache. `compileFileAsync` and `renderFileAsync` take `AsyncCompileOptions`, so
+their `loader` may answer with promises.
+
+The synchronous methods throw "The loader is asynchronous; use compileFileAsync
+or renderFileAsync" the first time an asynchronous loader is asked for a
+template.
 
 ### CacheOptions
 
@@ -175,10 +187,14 @@ never changes.
 ### memoryLoader
 
 ```typescript
-memoryLoader(files: Record<string, string>): SyncTemplateLoader
+memoryLoader(files: Record<string, string> | ReadonlyMap<string, string>): SyncTemplateLoader
 ```
 
-Reads from an object. Its templates are treated as immutable.
+Reads from an object or a `Map`. Its templates are treated as immutable.
+
+Keys are normalized the way names are, so `./a.tmpl` and `dir//b.tmpl` are
+found under their own spelling. Two keys that name the same template once
+normalized throw.
 
 ### nodeFileLoader
 
@@ -195,10 +211,23 @@ nodeFileLoader(options?: NodeFileLoaderOptions): SyncTemplateLoader
 | `searchAllPaths` | `false` | Search the configured paths rather than the referring file's directory |
 | `root` | `HTML_TEMPLATE_ROOT` | Prefix prepended to the search paths |
 | `cwd` | working directory | Directory used as the last resort |
-| `encoding` | `utf-8` | Encoding, in Node or Perl spelling |
+| `encoding` | `utf-8` | An encoding Node's `Buffer` or `TextDecoder` can decode, in Node or Perl spelling |
 
 Everything read from the environment is captured when the loader is built, so
 resolution cannot shift under a long-lived process.
+
+Perl names such as `shiftjis` and `cp932` map to `shift_jis`. An encoding name
+that cannot be decoded throws when the loader is created. A bare `utf16`
+requires a byte order mark; name `utf-16le` or `utf-16be` for text without one.
+
+```typescript
+fileVersion(path: string): string | undefined
+```
+
+Also exported from `@libraz/html-template/loaders`: the version string
+`nodeFileLoader` reports for a file, built from its modification time and size,
+or `undefined` when the file cannot be read. Useful for a custom loader's
+`version`.
 
 ## TemplateShape
 
@@ -206,7 +235,7 @@ A read-only view of what a template declares.
 
 | Member | Returns |
 | --- | --- |
-| `names` | Names at this level, in declaration order |
+| `names` | Lookup keys at this level (lowercased when `caseSensitive` is off), in declaration order |
 | `get(name)` | `ParamInfo`, or undefined |
 | `has(name)` | `boolean` |
 | `kind(name)` | `'var'`, `'loop'` or undefined |
@@ -215,7 +244,9 @@ A read-only view of what a template declares.
 
 `ParamInfo` carries the name as first written, the normalized key, the kind,
 every form the name is used in, whether any tag gave it a `DEFAULT`, the
-`ESCAPE` values seen on it, and where it first appears.
+`ESCAPE` values seen on it, and where it first appears. That location, `loc`,
+carries `file`, the template that physically contains the tag, with that
+file's own line and column.
 
 The shape always describes the template's real nesting, even with `globalVars`
 on — that setting changes how names resolve at render time, not what the
@@ -227,4 +258,37 @@ template says.
 It is the only error `onMissing: 'ignore'` swallows.
 
 Everything else is a plain `Error` naming the template and, where the parser
-knows it, the line.
+knows it, the line. For a tag inside an included template, that is the included
+template and its own line.
+
+## Type generation
+
+Exported from `@libraz/html-template/codegen`; see [type generation](type-generation.md).
+
+```typescript
+generateTypes(source: string, options?: CodegenOptions): string
+generateModule(entries: TemplateEntry[], options?: CodegenOptions): string
+pascalCase(name: string): string
+```
+
+`pascalCase` is how the command turns a file stem into an interface name.
+
+| `CodegenOptions` | Default | Effect |
+| --- | --- | --- |
+| `name` | `TemplateData` | Interface name, for `generateTypes` |
+| `required` | `false` | Make every property required |
+| `split` | `false` | Give each loop's row type its own named interface |
+| `importFrom` | `@libraz/html-template` | Module the value types are imported from |
+| `compile` | — | `CompileOptions` used to read the template |
+
+A `TemplateEntry` is `{ name, source, filename? }`; `filename` lets its includes
+resolve relative to it. Interface names, split row interfaces included, must be
+valid identifiers and unique within the generated module, or generation throws.
+
+## version
+
+```typescript
+version: string
+```
+
+The package version, exported from `@libraz/html-template`.

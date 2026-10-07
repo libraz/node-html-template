@@ -3,9 +3,12 @@
 The asset worth carrying across is the template syntax, not the API around it.
 Templates come over unchanged; the code that renders them does not.
 
-The syntax is verified against output recorded from Perl HTML::Template 2.98,
-case by case, so a template that renders one way there renders the same way
-here.
+The syntax is checked against output recorded from Perl HTML::Template 2.98.
+Every recorded case is asserted except those that exercise Perl's own API
+(`param()`, `associate`, `query()`, `clear_params()`), which have no
+counterpart here, and two that differ in behaviour, listed under
+[differences that remain](#differences-that-remain). `TMPL_COMMENT` and
+`TMPL_NOTE` have no recorded case.
 
 ## The API
 
@@ -65,8 +68,8 @@ catch genuine typos before the code runs.
 | --- | --- |
 | `filename` | `Environment#compileFile(name)` |
 | `scalarref`, `arrayref`, `filehandle`, `type` + `source` | `compile(source)` |
-| `path` | `IncludeOptions.paths`, or the loader's `paths` |
-| `search_path_on_include` | `IncludeOptions.searchAllPaths` |
+| `path` | `nodeFileLoader`'s `paths` |
+| `search_path_on_include` | `nodeFileLoader`'s `searchAllPaths` |
 | `max_includes` | `IncludeOptions.maxDepth` |
 | `die_on_missing_include` | `IncludeOptions.onMissing` |
 | `no_includes` | `includes: false` |
@@ -100,6 +103,19 @@ module:
 ```typescript
 template.render(data, { resolve: (name) => request.query[name] });
 ```
+
+## Differences that remain
+
+- **A scalar given for a loop name** renders as an empty loop. Perl dies when
+  the value is set.
+- **An array given for a name used only in `TMPL_IF`** is accepted and judged by
+  the [truth rules](template-syntax.md#tmpl_if-and-tmpl_unless), so an empty array takes the else branch. Perl rejects it
+  when the value is set.
+- **Tag closers are more lenient.** A self-closing slash straight after the
+  last attribute (`<TMPL_VAR x/>`) and a comment closer straight after it
+  (`<!-- TMPL_VAR x-->`) are accepted; Perl does not treat them the same way.
+- **A space after `<` makes the text literal.** `< TMPL_VAR x>` is ordinary
+  text, as in Perl, even though a space before the closing `>` is fine.
 
 ## Behaviour that is unchanged
 
