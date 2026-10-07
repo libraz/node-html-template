@@ -25,7 +25,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "html-template-codegen": "./dist/cli.js"
+    "html-template-codegen": "dist/cli.js"
   },
   "files": [
     "dist",
