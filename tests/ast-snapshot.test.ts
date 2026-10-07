@@ -14,8 +14,8 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { expandIncludes } from '../src/compile/expandIncludes.js';
 import { nodeFileLoader } from '../src/loader/nodeFile.js';
-import { stripComments } from '../src/parser/comments.js';
 import { Parser } from '../src/parser/Parser.js';
+import { SourceMap, TemplateText } from '../src/parser/sourceMap.js';
 import { Tokenizer } from '../src/parser/Tokenizer.js';
 import type { ParseNode } from '../src/types.js';
 
@@ -28,8 +28,14 @@ interface ParseSettings {
  * Run the preprocess-and-parse pipeline without the include stage.
  */
 function parse(source: string, settings: ParseSettings = {}): ParseNode[] {
-  const prepared = stripComments(source);
-  const tokens = new Tokenizer(prepared, undefined, settings.vanguard ?? false, settings.strict ?? true).tokenize();
+  const template = TemplateText.prepare(source);
+  const tokens = new Tokenizer(
+    template.text,
+    undefined,
+    settings.vanguard ?? false,
+    settings.strict ?? true,
+    SourceMap.of(template)
+  ).tokenize();
   return new Parser(tokens).parse();
 }
 
@@ -139,12 +145,15 @@ describe('AST snapshots with includes', () => {
    * @returns Flattened text
    */
   const expand = (source: string): string =>
-    expandIncludes(source, join(dir, 'root.tmpl'), {
-      loader: nodeFileLoader({ paths: [dir] }),
-      maxDepth: 10,
-      onMissing: 'throw',
-      prepare: (text) => text
-    }).text;
+    expandIncludes(
+      { id: join(dir, 'root.tmpl'), text: source },
+      {
+        loader: nodeFileLoader({ paths: [dir] }),
+        maxDepth: 10,
+        onMissing: 'throw',
+        filter: (text) => text
+      }
+    ).text;
 
   it('expands three levels into a single flat tree', () => {
     expect(parse(expand('top <TMPL_VAR NAME="top"> <TMPL_INCLUDE NAME="level1.tmpl">'))).toMatchSnapshot();

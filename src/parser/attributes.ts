@@ -48,6 +48,9 @@ const ESCAPE_VALUES: Record<string, EscapeType> = {
 /** Attribute keywords that require an `=` and a value */
 const KEYWORDS = new Set(['name', 'escape', 'default']);
 
+/** Tags whose NAME attribute is mandatory */
+const TAGS_NEEDING_NAME = new Set(['VAR', 'LOOP', 'IF', 'UNLESS', 'INCLUDE']);
+
 const WHITESPACE = /\s/;
 
 /**
@@ -78,6 +81,35 @@ export function resolveEscapeType(raw: string): EscapeType {
 }
 
 /**
+ * Check attributes against the rules Perl enforces per tag.
+ *
+ * Shared by the tokenizer and the include scanner, so TMPL_INCLUDE is held to
+ * the same rules as every other tag even though it is expanded before
+ * tokenizing.
+ *
+ * @param tagName - Uppercased tag name
+ * @param attrs - Parsed attributes
+ * @returns Error message, or undefined when valid
+ */
+export function validateTagAttributes(tagName: string, attrs: TagAttributes): string | undefined {
+  if (tagName !== 'VAR') {
+    if (attrs.escape !== undefined) {
+      return `ESCAPE option invalid in a TMPL_${tagName} tag`;
+    }
+    if (attrs.default !== undefined) {
+      return `DEFAULT option invalid in a TMPL_${tagName} tag`;
+    }
+  }
+
+  if (TAGS_NEEDING_NAME.has(tagName) && !attrs.name) {
+    return `No NAME given to a TMPL_${tagName} tag`;
+  }
+
+  // Perl ignores a stray NAME on TMPL_ELSE rather than rejecting it.
+  return undefined;
+}
+
+/**
  * Single-pass scanner over a tag's attribute text.
  *
  * The grammar is a sequence of items separated by whitespace, where each
@@ -98,7 +130,8 @@ class AttributeScanner {
 
   constructor(source: string) {
     // A self-closing slash is part of the tag terminator, not an attribute.
-    this.source = source.replace(/\s*\/\s*$/, '');
+    const trimmed = source.trimEnd();
+    this.source = trimmed.endsWith('/') ? trimmed.slice(0, -1) : source;
   }
 
   /**

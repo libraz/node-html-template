@@ -10,9 +10,31 @@
 
 import type { SyncTemplateLoader, TemplateLoader } from '../loader/types.js';
 import { type CacheOptions, TemplateCache, type Versions } from './cache.js';
-import { compile, compileAsync } from './compile.js';
+import { compile, compileEntry, compileEntryAsync } from './compile.js';
 import type { Template } from './Template.js';
-import type { CompileOptions, RenderOptions, TemplateData } from './types.js';
+import type { AsyncCompileOptions, CompileOptions, RenderOptions, TemplateData } from './types.js';
+
+/** Raised when a synchronous method would have to call an asynchronous loader */
+const ASYNC_LOADER_MESSAGE = 'The loader is asynchronous; use compileFileAsync or renderFileAsync';
+
+/**
+ * Stands in for an asynchronous loader on a synchronous path.
+ *
+ * It fails on first use rather than up front, so text with no includes still
+ * compiles, and it never lets the real loader hand back a promise where a
+ * value is expected.
+ */
+const ASYNC_LOADER_GUARD: SyncTemplateLoader = {
+  sync: true,
+
+  resolve(): never {
+    throw new Error(ASYNC_LOADER_MESSAGE);
+  },
+
+  read(): never {
+    throw new Error(ASYNC_LOADER_MESSAGE);
+  }
+};
 
 /**
  * Settings shared by every template an environment compiles.
@@ -58,6 +80,11 @@ export class Environment {
 
   private readonly cache: TemplateCache | undefined;
 
+  /** Identity of every loader a cache key has named */
+  private readonly loaderIds = new WeakMap<TemplateLoader, number>();
+
+  private loaderCount = 0;
+
   /**
    * @param options - Settings shared by every template this environment compiles
    */
@@ -76,8 +103,8 @@ export class Environment {
    * @param options - Settings overriding the environment's own
    * @returns Compiled template
    */
-  compile<T extends TemplateData = TemplateData>(source: string, options: CompileOptions = {}): Template<T> {
-    return compile<T>(source, this.settings(options));
+  compile<T extends object = TemplateData>(source: string, options: CompileOptions = {}): Template<T> {
+    return compile<T>(source, { ...this.settings(options), loader: this.loaderFor(options, true) });
   }
 
   /**
@@ -86,19 +113,22 @@ export class Environment {
    * @param name - Template name, resolved by the loader
    * @param options - Settings overriding the environment's own
    * @returns Compiled template
-   * @throws Error when the environment's loader cannot answer synchronously
+   * @throws Error when there is no loader, or it cannot answer synchronously
    */
-  compileFile<T extends TemplateData = TemplateData>(name: string, options: CompileOptions = {}): Template<T> {
-    const loader = this.syncLoader();
+  compileFile<T extends object = TemplateData>(name: string, options: CompileOptions = {}): Template<T> {
+    const loader = required(this.loaderFor(options, true));
 
     const id = loader.resolve({ name, include: false });
-    const key = this.cacheKey(id, options);
+    const key = this.cacheKey(id, options, loader);
 
     const cached = key === undefined ? undefined : this.lookup(key, loader);
     if (cached) return cached as Template<T>;
 
     const resource = loader.read(id);
-    const template = compile<T>(resource.text, { ...this.settings(options), filename: id, loader });
+    const template = compileEntry<T>(
+      { id, text: resource.text, resource },
+      { ...this.settings(options), filename: id, loader }
+    );
 
     if (key !== undefined) {
       this.cache?.set(key, template, template.compiled.versions);
@@ -114,19 +144,22 @@ export class Environment {
    * @param options - Settings overriding the environment's own
    * @returns Compiled template
    */
-  async compileFileAsync<T extends TemplateData = TemplateData>(
+  async compileFileAsync<T extends object = TemplateData>(
     name: string,
-    options: CompileOptions = {}
+    options: AsyncCompileOptions = {}
   ): Promise<Template<T>> {
-    const loader = this.requireLoader();
+    const loader = required(this.loaderFor(options, false));
     const id = await loader.resolve({ name, include: false });
-    const key = this.cacheKey(id, options);
+    const key = this.cacheKey(id, options, loader);
 
     const cached = key === undefined ? undefined : await this.lookupAsync(key, loader);
     if (cached) return cached as Template<T>;
 
     const resource = await loader.read(id);
-    const template = await compileAsync<T>(resource.text, { ...this.settings(options), filename: id, loader });
+    const template = await compileEntryAsync<T>(
+      { id, text: resource.text, resource },
+      { ...this.settings(options), filename: id, loader }
+    );
 
     if (key !== undefined) {
       this.cache?.set(key, template, template.compiled.versions);
@@ -143,7 +176,7 @@ export class Environment {
    * @param options - Compile and render settings
    * @returns Rendered text
    */
-  render<T extends TemplateData = TemplateData>(
+  render<T extends object = TemplateData>(
     source: string,
     data: T,
     options: CompileOptions & RenderOptions = {}
@@ -159,7 +192,7 @@ export class Environment {
    * @param options - Compile and render settings
    * @returns Rendered text
    */
-  renderFile<T extends TemplateData = TemplateData>(
+  renderFile<T extends object = TemplateData>(
     name: string,
     data: T,
     options: CompileOptions & RenderOptions = {}
@@ -175,10 +208,10 @@ export class Environment {
    * @param options - Compile and render settings
    * @returns Rendered text
    */
-  async renderFileAsync<T extends TemplateData = TemplateData>(
+  async renderFileAsync<T extends object = TemplateData>(
     name: string,
     data: T,
-    options: CompileOptions & RenderOptions = {}
+    options: AsyncCompileOptions & RenderOptions = {}
   ): Promise<string> {
     return (await this.compileFileAsync<T>(name, options)).render(data, options);
   }
@@ -203,42 +236,27 @@ export class Environment {
    * Merge the environment's defaults with one call's overrides.
    *
    * @param options - Per-call settings
-   * @returns Settings for the compiler
+   * @returns Settings for the compiler, without a loader
    */
-  private settings(options: CompileOptions): CompileOptions {
-    return { ...this.defaults, ...options, loader: (options.loader ?? this.loader) as SyncTemplateLoader | undefined };
+  private settings(options: CompileOptions | AsyncCompileOptions): Omit<CompileOptions, 'loader'> {
+    const { loader: _loader, ...overrides } = options;
+    return { ...this.defaults, ...overrides };
   }
 
   /**
-   * Return the configured loader.
+   * Choose the loader for one call: the per-call override, else the
+   * environment's own. Every method obtains its loader here.
    *
-   * @returns The loader
-   * @throws Error when the environment has none
+   * @param options - Per-call settings
+   * @param sync - Whether the caller needs answers without a promise; an
+   *   asynchronous loader is then swapped for one that fails on first use
+   * @returns The loader, or undefined when none is configured
    */
-  private requireLoader(): TemplateLoader {
-    if (!this.loader) {
-      throw new Error(
-        "This environment has no loader, so it cannot read templates by name; pass one as the 'loader' option"
-      );
-    }
-
-    return this.loader;
-  }
-
-  /**
-   * Assert that the loader can answer without a promise.
-   *
-   * @returns The loader, typed as synchronous
-   * @throws Error when the loader is asynchronous
-   */
-  private syncLoader(): SyncTemplateLoader {
-    const loader = this.requireLoader();
-
-    if (!loader.sync) {
-      throw new Error('This environment has an asynchronous loader; use compileFileAsync or renderFileAsync');
-    }
-
-    return loader as SyncTemplateLoader;
+  private loaderFor(options: { loader?: TemplateLoader }, sync: true): SyncTemplateLoader | undefined;
+  private loaderFor(options: { loader?: TemplateLoader }, sync: false): TemplateLoader | undefined;
+  private loaderFor(options: { loader?: TemplateLoader }, sync: boolean): TemplateLoader | undefined {
+    const loader = options.loader ?? this.loader;
+    return sync && loader && !loader.sync ? ASYNC_LOADER_GUARD : loader;
   }
 
   /**
@@ -248,7 +266,7 @@ export class Environment {
    * @param loader - Loader consulted for current versions
    * @returns Cached template, or undefined on a miss or a stale entry
    */
-  private lookup(key: string, loader: SyncTemplateLoader): Template | undefined {
+  private lookup(key: string, loader: SyncTemplateLoader): Template<object> | undefined {
     const entry = this.cache?.take(key);
     if (!entry) return undefined;
 
@@ -271,7 +289,7 @@ export class Environment {
    * @param loader - Loader consulted for current versions
    * @returns Cached template, or undefined on a miss or a stale entry
    */
-  private async lookupAsync(key: string, loader: TemplateLoader): Promise<Template | undefined> {
+  private async lookupAsync(key: string, loader: TemplateLoader): Promise<Template<object> | undefined> {
     const entry = this.cache?.take(key);
     if (!entry) return undefined;
 
@@ -292,9 +310,14 @@ export class Environment {
    *
    * @param id - Canonical template id
    * @param options - Per-call settings
+   * @param loader - Loader the template is read through
    * @returns Cache key, or undefined when the compilation must not be cached
    */
-  private cacheKey(id: string, options: CompileOptions): string | undefined {
+  private cacheKey(
+    id: string,
+    options: CompileOptions | AsyncCompileOptions,
+    loader: TemplateLoader
+  ): string | undefined {
     if (!this.cache) return undefined;
 
     const settings = this.settings(options);
@@ -304,11 +327,11 @@ export class Environment {
     // filters that differ would otherwise share an entry and one of the two
     // callers would get the wrong output.
     if (settings.filters?.length) return undefined;
-    if (settings.loader !== this.loader) return undefined;
 
     const includes = typeof settings.includes === 'object' ? settings.includes : {};
 
     return JSON.stringify([
+      this.loaderId(loader),
       id,
       settings.strict ?? true,
       settings.caseSensitive ?? true,
@@ -317,11 +340,42 @@ export class Environment {
       settings.legacy?.percentVars ?? false,
       settings.includes !== false,
       includes.maxDepth ?? 10,
-      includes.onMissing ?? 'throw',
-      includes.searchAllPaths ?? false,
-      includes.paths ?? []
+      includes.onMissing ?? 'throw'
     ]);
   }
+
+  /**
+   * Number a loader for use in cache keys, so templates read through
+   * different loaders never share an entry.
+   *
+   * @param loader - Loader
+   * @returns Stable number for that loader
+   */
+  private loaderId(loader: TemplateLoader): number {
+    let id = this.loaderIds.get(loader);
+    if (id === undefined) {
+      id = ++this.loaderCount;
+      this.loaderIds.set(loader, id);
+    }
+    return id;
+  }
+}
+
+/**
+ * Insist on a loader for a method that reads templates by name.
+ *
+ * @param loader - Loader chosen for the call
+ * @returns The loader
+ * @throws Error when there is none
+ */
+function required<L extends TemplateLoader>(loader: L | undefined): L {
+  if (!loader) {
+    throw new Error(
+      "This environment has no loader, so it cannot read templates by name; pass one as the 'loader' option"
+    );
+  }
+
+  return loader;
 }
 
 /**

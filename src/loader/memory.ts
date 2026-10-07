@@ -17,16 +17,28 @@ import type { ResolveRequest, SyncTemplateLoader, TemplateResource } from './typ
  * The map is copied on construction, so the loader's templates are immutable
  * and compilations from it stay valid indefinitely.
  *
- * An include is resolved against the directory of the referencing template
- * first, then against the bare name, so a flat map and a nested one both work.
+ * Keys are normalized the way names are, so `./a.tmpl` and `dir//b.tmpl` are
+ * found under their own spelling. An include is resolved against the directory
+ * of the referencing template first, then against the bare name, so a flat map
+ * and a nested one both work.
  *
  * @param files - Template text keyed by name
  * @returns Synchronous loader
+ * @throws Error when two keys name the same template once normalized
  */
 export function memoryLoader(
   files: Readonly<Record<string, string>> | ReadonlyMap<string, string>
 ): SyncTemplateLoader {
-  const entries = files instanceof Map ? new Map(files) : new Map(Object.entries(files as Record<string, string>));
+  const entries = new Map<string, string>();
+  const source = files instanceof Map ? files : Object.entries(files as Record<string, string>);
+
+  for (const [key, text] of source) {
+    const id = normalize(key);
+    if (entries.has(id)) {
+      throw new Error(`memoryLoader: '${key}' names the same template as another key ('${id}')`);
+    }
+    entries.set(id, text);
+  }
 
   return {
     sync: true,

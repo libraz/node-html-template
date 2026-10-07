@@ -23,7 +23,7 @@ function options(files: Record<string, string>, overrides: Partial<ExpandOptions
     loader: memoryLoader(files),
     maxDepth: 10,
     onMissing: 'throw',
-    prepare: (text) => text,
+    filter: (text) => text,
     ...overrides
   };
 }
@@ -49,15 +49,17 @@ function counting(loader: SyncTemplateLoader, counts: Map<string, number>): Sync
 
 describe('expandIncludes', () => {
   it('splices an include into the referencing text', () => {
-    const result = expandIncludes('A<TMPL_INCLUDE NAME="child.tmpl">B', 'root.tmpl', options({ 'child.tmpl': 'C' }));
+    const result = expandIncludes(
+      { id: 'root.tmpl', text: 'A<TMPL_INCLUDE NAME="child.tmpl">B' },
+      options({ 'child.tmpl': 'C' })
+    );
 
     expect(result.text).toBe('ACB');
   });
 
   it('expands three levels', () => {
     const result = expandIncludes(
-      'top <TMPL_INCLUDE NAME="mid.tmpl">',
-      'root.tmpl',
+      { id: 'root.tmpl', text: 'top <TMPL_INCLUDE NAME="mid.tmpl">' },
       options({
         'mid.tmpl': '(mid <TMPL_INCLUDE NAME="deep.tmpl">)',
         'deep.tmpl': '[deep]'
@@ -76,8 +78,10 @@ describe('expandIncludes', () => {
     };
 
     const result = expandIncludes(
-      '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl"><TMPL_INCLUDE NAME="part.tmpl">',
-      'root.tmpl',
+      {
+        id: 'root.tmpl',
+        text: '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl"><TMPL_INCLUDE NAME="part.tmpl">'
+      },
       { ...options(files), loader: counting(memoryLoader(files), counts) }
     );
 
@@ -85,19 +89,18 @@ describe('expandIncludes', () => {
     expect(counts.get('part.tmpl')).toBe(1);
   });
 
-  it('applies the prepare step to included text but not to the entry text', () => {
+  it('applies the filter to the entry text and to every included text', () => {
     const result = expandIncludes(
-      'ROOT <TMPL_INCLUDE NAME="child.tmpl">',
-      'root.tmpl',
-      options({ 'child.tmpl': 'child' }, { prepare: (text) => text.toUpperCase() })
+      { id: 'root.tmpl', text: 'root <TMPL_INCLUDE NAME="child.tmpl">' },
+      options({ 'child.tmpl': 'leaf' }, { filter: (text) => text.replace(/root|leaf/g, (word) => word.toUpperCase()) })
     );
 
-    expect(result.text).toBe('ROOT CHILD');
+    expect(result.text).toBe('ROOT LEAF');
   });
 
   it('reports where each stretch of the output came from', () => {
     const root = 'A<TMPL_INCLUDE NAME="child.tmpl">B';
-    const result = expandIncludes(root, 'root.tmpl', options({ 'child.tmpl': 'C' }));
+    const result = expandIncludes({ id: 'root.tmpl', text: root }, options({ 'child.tmpl': 'C' }));
 
     expect(result.segments).toEqual([
       { outputStart: 0, id: 'root.tmpl', sourceStart: 0 },
@@ -106,23 +109,49 @@ describe('expandIncludes', () => {
     ]);
   });
 
-  it('records the version of every template it drew on', () => {
-    const result = expandIncludes('<TMPL_INCLUDE NAME="child.tmpl">', 'root.tmpl', options({ 'child.tmpl': 'C' }));
+  it('records the version of every template read through the loader', () => {
+    const files = { 'root.tmpl': '<TMPL_INCLUDE NAME="child.tmpl">', 'child.tmpl': 'C' };
+    const resource = memoryLoader(files).read('root.tmpl');
+    const result = expandIncludes({ id: 'root.tmpl', text: resource.text, resource }, options(files));
 
     expect([...result.versions.keys()].sort()).toEqual(['child.tmpl', 'root.tmpl']);
   });
 
-  it('rejects a direct cycle', () => {
-    expect(() => expandIncludes('<TMPL_INCLUDE NAME="self.tmpl">', 'self.tmpl', options({ 'self.tmpl': 'x' }))).toThrow(
-      /likely recursive includes/
+  it('records no version for entry text the caller supplied', () => {
+    const result = expandIncludes(
+      { id: 'root.tmpl', text: '<TMPL_INCLUDE NAME="child.tmpl">' },
+      options({ 'child.tmpl': 'C' })
     );
+
+    expect([...result.versions.keys()]).toEqual(['child.tmpl']);
+  });
+
+  it('takes each version from the read that produced the text, not a later query', () => {
+    let generation = 0;
+    const inner = memoryLoader({ 'root.tmpl': '<TMPL_INCLUDE NAME="child.tmpl">', 'child.tmpl': 'C' });
+    const loader: SyncTemplateLoader = {
+      sync: true,
+      resolve: (request) => inner.resolve(request),
+      read: (id) => ({ ...inner.read(id), version: `read-${generation}` }),
+      version: () => `later-${++generation}`
+    };
+
+    const resource = loader.read('root.tmpl');
+    const result = expandIncludes({ id: 'root.tmpl', text: resource.text, resource }, { ...options({}), loader });
+
+    expect(Object.fromEntries(result.versions)).toEqual({ 'root.tmpl': 'read-0', 'child.tmpl': 'read-0' });
+  });
+
+  it('rejects a direct cycle', () => {
+    expect(() =>
+      expandIncludes({ id: 'self.tmpl', text: '<TMPL_INCLUDE NAME="self.tmpl">' }, options({ 'self.tmpl': 'x' }))
+    ).toThrow(/likely recursive includes/);
   });
 
   it('rejects an indirect cycle', () => {
     expect(() =>
       expandIncludes(
-        '<TMPL_INCLUDE NAME="a.tmpl">',
-        'root.tmpl',
+        { id: 'root.tmpl', text: '<TMPL_INCLUDE NAME="a.tmpl">' },
         options({
           'a.tmpl': '<TMPL_INCLUDE NAME="b.tmpl">',
           'b.tmpl': '<TMPL_INCLUDE NAME="a.tmpl">'
@@ -133,8 +162,7 @@ describe('expandIncludes', () => {
 
   it('allows the same template twice on separate branches', () => {
     const result = expandIncludes(
-      '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="a.tmpl">',
-      'root.tmpl',
+      { id: 'root.tmpl', text: '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="a.tmpl">' },
       options({ 'a.tmpl': 'x' })
     );
 
@@ -149,18 +177,17 @@ describe('expandIncludes', () => {
     };
 
     expect(() =>
-      expandIncludes('<TMPL_INCLUDE NAME="one.tmpl">', 'root.tmpl', options(files, { maxDepth: 2 }))
+      expandIncludes({ id: 'root.tmpl', text: '<TMPL_INCLUDE NAME="one.tmpl">' }, options(files, { maxDepth: 2 }))
     ).toThrow(/parsed 2 files deep/);
 
-    expect(expandIncludes('<TMPL_INCLUDE NAME="one.tmpl">', 'root.tmpl', options(files, { maxDepth: 0 })).text).toBe(
-      'end'
-    );
+    expect(
+      expandIncludes({ id: 'root.tmpl', text: '<TMPL_INCLUDE NAME="one.tmpl">' }, options(files, { maxDepth: 0 })).text
+    ).toBe('end');
   });
 
   it('drops a missing include when told to ignore it', () => {
     const result = expandIncludes(
-      'before<TMPL_INCLUDE NAME="absent.tmpl">after',
-      'root.tmpl',
+      { id: 'root.tmpl', text: 'before<TMPL_INCLUDE NAME="absent.tmpl">after' },
       options({}, { onMissing: 'ignore' })
     );
 
@@ -170,15 +197,14 @@ describe('expandIncludes', () => {
   it('still enforces depth and cycles when missing includes are ignored', () => {
     expect(() =>
       expandIncludes(
-        '<TMPL_INCLUDE NAME="self.tmpl">',
-        'self.tmpl',
+        { id: 'self.tmpl', text: '<TMPL_INCLUDE NAME="self.tmpl">' },
         options({ 'self.tmpl': 'x' }, { onMissing: 'ignore' })
       )
     ).toThrow(/likely recursive includes/);
   });
 
   it('leaves a template without includes untouched', () => {
-    const result = expandIncludes('plain text', 'root.tmpl', options({}));
+    const result = expandIncludes({ id: 'root.tmpl', text: 'plain text' }, options({}));
 
     expect(result.text).toBe('plain text');
     expect(result.segments).toHaveLength(1);
@@ -230,11 +256,14 @@ describe('expandIncludesAsync', () => {
   // the same code, so the two entry points must agree exactly.
   for (const fixture of FIXTURES) {
     it(`matches the synchronous result: ${fixture.name}`, async () => {
-      const sync = expandIncludes(fixture.root, 'root.tmpl', options(fixture.files));
-      const async = await expandIncludesAsync(fixture.root, 'root.tmpl', {
-        ...options(fixture.files),
-        loader: deferred(memoryLoader(fixture.files))
-      });
+      const sync = expandIncludes({ id: 'root.tmpl', text: fixture.root }, options(fixture.files));
+      const async = await expandIncludesAsync(
+        { id: 'root.tmpl', text: fixture.root },
+        {
+          ...options(fixture.files),
+          loader: deferred(memoryLoader(fixture.files))
+        }
+      );
 
       expect(async.text).toBe(sync.text);
       expect(async.segments).toEqual(sync.segments);
@@ -257,8 +286,7 @@ describe('expandIncludesAsync', () => {
     });
 
     await expandIncludesAsync(
-      '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl"><TMPL_INCLUDE NAME="c.tmpl">',
-      'root.tmpl',
+      { id: 'root.tmpl', text: '<TMPL_INCLUDE NAME="a.tmpl"><TMPL_INCLUDE NAME="b.tmpl"><TMPL_INCLUDE NAME="c.tmpl">' },
       { ...options(files), loader }
     );
 
@@ -269,18 +297,24 @@ describe('expandIncludesAsync', () => {
     const files = { 'a.tmpl': '<TMPL_INCLUDE NAME="b.tmpl">', 'b.tmpl': '<TMPL_INCLUDE NAME="a.tmpl">' };
 
     await expect(
-      expandIncludesAsync('<TMPL_INCLUDE NAME="a.tmpl">', 'root.tmpl', {
-        ...options(files),
-        loader: deferred(memoryLoader(files))
-      })
+      expandIncludesAsync(
+        { id: 'root.tmpl', text: '<TMPL_INCLUDE NAME="a.tmpl">' },
+        {
+          ...options(files),
+          loader: deferred(memoryLoader(files))
+        }
+      )
     ).rejects.toThrow(/likely recursive includes/);
   });
 
   it('drops a missing include when told to ignore it', async () => {
-    const result = await expandIncludesAsync('before<TMPL_INCLUDE NAME="absent.tmpl">after', 'root.tmpl', {
-      ...options({}, { onMissing: 'ignore' }),
-      loader: deferred(memoryLoader({}))
-    });
+    const result = await expandIncludesAsync(
+      { id: 'root.tmpl', text: 'before<TMPL_INCLUDE NAME="absent.tmpl">after' },
+      {
+        ...options({}, { onMissing: 'ignore' }),
+        loader: deferred(memoryLoader({}))
+      }
+    );
 
     expect(result.text).toBe('beforeafter');
   });

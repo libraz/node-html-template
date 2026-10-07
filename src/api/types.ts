@@ -34,18 +34,12 @@ export type TemplateData = Record<string, unknown>;
 export type { Sink as OutputSink } from '../runtime/Executor.js';
 
 /**
- * How TMPL_INCLUDE tags are resolved.
+ * How TMPL_INCLUDE tags are expanded.
+ *
+ * Where an included name is looked up is the loader's business; for files,
+ * see `nodeFileLoader`'s `paths` and `searchAllPaths`.
  */
 export interface IncludeOptions {
-  /** Directories searched for included templates */
-  paths?: readonly string[];
-
-  /**
-   * Search the configured paths for includes too, rather than resolving them
-   * relative to the template that referenced them.
-   */
-  searchAllPaths?: boolean;
-
   /** Maximum nesting depth; zero or less means unlimited. Defaults to 10. */
   maxDepth?: number;
 
@@ -80,6 +74,8 @@ export interface CompileOptions {
   /**
    * Escape applied to variables whose tag carries no ESCAPE attribute.
    * Defaults to `html`; an explicit `ESCAPE=NONE` still opts a tag out.
+   * Accepts the spellings an ESCAPE attribute does, so Perl's `HTML`, `URL`
+   * and `JS` work; any other value throws.
    */
   defaultEscape?: EscapeType;
 
@@ -98,7 +94,10 @@ export interface CompileOptions {
   /** Opt-in support for older template syntax */
   legacy?: LegacyOptions;
 
-  /** Where included templates are read from. Defaults to the filesystem. */
+  /**
+   * Where included templates are read from. There is no default: a template
+   * containing TMPL_INCLUDE needs one (`nodeFileLoader` reads from disk).
+   */
   loader?: SyncTemplateLoader;
 }
 
@@ -121,12 +120,17 @@ export interface RenderOptions {
    */
   strictData?: boolean;
 
-  /** Provide `__first__`, `__last__`, `__index__` and `__counter__` in loops */
+  /**
+   * Provide `__first__`, `__last__`, `__inner__`, `__outer__`, `__odd__`,
+   * `__even__`, `__counter__` and `__index__` in loops
+   */
   loopContextVars?: boolean;
 
   /**
    * Call a function value at most once per render rather than on every
-   * reference. Defaults to true.
+   * reference, wherever it appears: at the top level, in loop rows, or as a
+   * value `resolve` returns. `resolve` itself is then called once per name.
+   * Defaults to true.
    */
   memoizeLazy?: boolean;
 
@@ -160,7 +164,10 @@ export interface ParamInfo {
   /** ESCAPE values seen on this name */
   readonly escapes: ReadonlySet<EscapeType>;
 
-  /** Where the name first appears */
+  /**
+   * Where the name first appears. `file` is the template that physically
+   * contains the tag, and `line` and `col` are relative to that file.
+   */
   readonly loc?: SourceLoc;
 }
 
@@ -168,7 +175,11 @@ export interface ParamInfo {
  * Read-only view of the parameters a template declares.
  */
 export interface TemplateShape {
-  /** Names declared at this level, in the order the template declares them */
+  /**
+   * Lookup keys of the names declared at this level, in the order the
+   * template declares them. These are {@link ParamInfo.key} values: lowercased
+   * when `caseSensitive` is off, so `get(key).name` gives the spelling used.
+   */
   readonly names: readonly string[];
 
   /**

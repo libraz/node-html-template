@@ -11,8 +11,9 @@
  * @module parser/Parser
  */
 
-import type { ParseNode, SourceLoc, Token } from '../types.js';
-import { createError } from '../utils/helpers.js';
+import type { ParseNode, SourceLoc } from '../types.js';
+import { templateError } from './sourceMap.js';
+import type { LocatedToken as Token } from './types.js';
 
 /**
  * Read the source position off a token.
@@ -24,7 +25,12 @@ import { createError } from '../utils/helpers.js';
  * @returns Source position, or undefined when the tokenizer supplied none
  */
 function locOf(token: Token): SourceLoc | undefined {
-  return token.line === undefined ? undefined : { line: token.line, col: token.col ?? 1 };
+  if (token.line === undefined) return undefined;
+
+  const loc: SourceLoc = { line: token.line, col: token.col ?? 1 };
+  if (token.file !== undefined) loc.file = token.file;
+
+  return loc;
 }
 
 /**
@@ -105,10 +111,9 @@ export class Parser {
     if (this.context.blockStack.length > 0) {
       const unclosed = this.context.blockStack[this.context.blockStack.length - 1];
       if (unclosed) {
-        throw createError(
+        throw this.error(
           `Unclosed ${unclosed.type} block${unclosed.name ? ` for "${unclosed.name}"` : ''}`,
-          this.context.filename,
-          this.currentToken()?.line
+          this.currentToken()
         );
       }
     }
@@ -162,7 +167,7 @@ export class Parser {
    */
   private parseTextNode(token: Token): ParseNode {
     if (token.type !== 'TEXT') {
-      throw createError('Expected TEXT token', this.context.filename, token.line);
+      throw this.error('Expected TEXT token', token);
     }
 
     return {
@@ -176,7 +181,7 @@ export class Parser {
    */
   private parseVarNode(token: Token): ParseNode {
     if (token.type !== 'VAR') {
-      throw createError('Expected VAR token', this.context.filename, token.line);
+      throw this.error('Expected VAR token', token);
     }
 
     // `escape` stays undefined when the tag carried no ESCAPE attribute, which
@@ -195,7 +200,7 @@ export class Parser {
    */
   private parseLoopNode(token: Token): ParseNode {
     if (token.type !== 'LOOP') {
-      throw createError('Expected LOOP token', this.context.filename, token.line);
+      throw this.error('Expected LOOP token', token);
     }
 
     const loopName = token.name ?? '';
@@ -220,11 +225,7 @@ export class Parser {
         // Pop from block stack
         const popped = this.context.blockStack.pop();
         if (popped?.type !== 'LOOP') {
-          throw createError(
-            `Mismatched ENDLOOP - expected end of ${popped?.type ?? 'unknown'}`,
-            this.context.filename,
-            currentToken.line
-          );
+          throw this.error(`Mismatched ENDLOOP - expected end of ${popped?.type ?? 'unknown'}`, currentToken);
         }
 
         // Create loop node with body
@@ -246,7 +247,7 @@ export class Parser {
     }
 
     // Reached end without ENDLOOP
-    throw createError(`Unclosed LOOP block for "${loopName}"`, this.context.filename, token.line);
+    throw this.error(`Unclosed LOOP block for "${loopName}"`, token);
   }
 
   /**
@@ -254,7 +255,7 @@ export class Parser {
    * This should not be reached during normal parsing (handled in parseLoopNode)
    */
   private parseEndLoopNode(token: Token): ParseNode | null {
-    throw createError('Unexpected ENDLOOP without matching LOOP', this.context.filename, token.line);
+    throw this.error('Unexpected ENDLOOP without matching LOOP', token);
   }
 
   /**
@@ -282,7 +283,7 @@ export class Parser {
 
       if (currentToken.type === 'ELSE') {
         if (inElse) {
-          throw createError(`Multiple ELSE blocks in ${blockType}`, this.context.filename, currentToken.line);
+          throw this.error(`Multiple ELSE blocks in ${blockType}`, currentToken);
         }
         inElse = true;
         this.context.pos += 1;
@@ -292,20 +293,15 @@ export class Parser {
       if (currentToken.type === 'ENDIF') {
         // Perl requires </TMPL_IF> for TMPL_IF and </TMPL_UNLESS> for TMPL_UNLESS.
         if (currentToken.closes !== undefined && currentToken.closes !== blockType) {
-          throw createError(
+          throw this.error(
             `found </TMPL_${currentToken.closes}> incorrectly terminating a <TMPL_${blockType}> (use </TMPL_${blockType}>)`,
-            this.context.filename,
-            currentToken.line
+            currentToken
           );
         }
 
         const popped = this.context.blockStack.pop();
         if (popped?.type !== 'IF' && popped?.type !== 'UNLESS') {
-          throw createError(
-            `Mismatched ENDIF - expected end of ${popped?.type ?? 'unknown'}`,
-            this.context.filename,
-            currentToken.line
-          );
+          throw this.error(`Mismatched ENDIF - expected end of ${popped?.type ?? 'unknown'}`, currentToken);
         }
 
         return {
@@ -330,7 +326,7 @@ export class Parser {
       this.context.pos += 1;
     }
 
-    throw createError(`Unclosed ${blockType} block for "${conditionName}"`, this.context.filename, token.line);
+    throw this.error(`Unclosed ${blockType} block for "${conditionName}"`, token);
   }
 
   /**
@@ -338,7 +334,7 @@ export class Parser {
    * This should not be reached during normal parsing (handled in parseIfNode/parseUnlessNode)
    */
   private parseElseNode(token: Token): ParseNode | null {
-    throw createError('Unexpected ELSE without matching IF/UNLESS', this.context.filename, token.line);
+    throw this.error('Unexpected ELSE without matching IF/UNLESS', token);
   }
 
   /**
@@ -346,7 +342,7 @@ export class Parser {
    * This should not be reached during normal parsing (handled in parseIfNode/parseUnlessNode)
    */
   private parseEndIfNode(token: Token): ParseNode | null {
-    throw createError('Unexpected ENDIF without matching IF/UNLESS', this.context.filename, token.line);
+    throw this.error('Unexpected ENDIF without matching IF/UNLESS', token);
   }
 
   /**
@@ -358,15 +354,25 @@ export class Parser {
    */
   private parseIncludeNode(token: Token): ParseNode | null {
     if (this.context.noIncludes) {
-      throw createError(
+      throw this.error(
         'HTML::Template : Illegal attempt to use TMPL_INCLUDE in template file : (no_includes => 1)',
-        this.context.filename,
-        token.line
+        token
       );
     }
 
     // INCLUDE tags are normally expanded during preprocessing.
     return { type: 'NOOP' };
+  }
+
+  /**
+   * Build an error located at a token, in the template that contains it.
+   *
+   * @param message - What went wrong
+   * @param token - Token the error is about, when there is one
+   * @returns Error to throw
+   */
+  private error(message: string, token: Token | undefined): Error {
+    return templateError(message, { file: token?.file ?? this.context.filename, line: token?.line });
   }
 
   /**

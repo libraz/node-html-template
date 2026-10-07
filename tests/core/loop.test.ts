@@ -184,8 +184,8 @@ describe('loop context variables', () => {
     expect(iterate('[<TMPL_VAR NAME="__last__">]', 1)).toBe('[1]');
   });
 
-  it('writes __odd__ as 1 and __even__ as an empty string', () => {
-    expect(iterate('<TMPL_VAR NAME="__odd__"><TMPL_VAR NAME="__even__">|', 3)).toBe('1|1|1|');
+  it('writes __odd__ as 1 on the first, third, ... rows and __even__ as 1 on the others, the other one empty', () => {
+    expect(iterate('<TMPL_VAR NAME="__odd__">,<TMPL_VAR NAME="__even__">|', 3)).toBe('1,|,1|1,|');
   });
 
   it('provides nothing unless asked', () => {

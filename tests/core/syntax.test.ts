@@ -119,6 +119,53 @@ describe('malformed templates', () => {
   it('leaves an unknown tag as text when strict is off', () => {
     expect(compile('A<TMPL_BOGUS NAME="x">B', { strict: false }).render({})).toBe('A<TMPL_BOGUS NAME="x">B');
   });
+  // Perl splits tags at `<` immediately followed by `TMPL_` or `!--`.
+  it('treats a space after the opening bracket as text, as Perl does', () => {
+    expect(compile('< TMPL_VAR NAME="x">').render({ x: 'y' })).toBe('< TMPL_VAR NAME="x">');
+    expect(compile('< !-- TMPL_VAR NAME="x" -->').render({ x: 'y' })).toBe('< !-- TMPL_VAR NAME="x" -->');
+  });
+
+  it('still accepts space inside the comment form', () => {
+    expect(compile('<!--   TMPL_VAR NAME="x" -->').render({ x: 'y' })).toBe('y');
+  });
+});
+
+describe('scanning time', () => {
+  const LIMIT_MS = 250;
+
+  /**
+   * Time a compile that is expected to fail or succeed quickly.
+   *
+   * @param run - Compile call
+   * @returns Elapsed milliseconds
+   */
+  function elapsed(run: () => unknown): number {
+    const start = performance.now();
+    try {
+      run();
+    } catch {
+      // Only the time matters here.
+    }
+    return performance.now() - start;
+  }
+
+  it.each([
+    ['spaces after an unclosed tag', `<TMPL_VAR${' '.repeat(50_000)}`],
+    ['newlines after an unclosed tag', `<TMPL_VAR${'\n'.repeat(50_000)}`],
+    ['an unclosed comment-form tag', `<!-- TMPL_VAR x --${' '.repeat(50_000)}`],
+    ['many unclosed tags', '<TMPL_VAR x '.repeat(20_000)],
+    ['many unclosed includes', '<TMPL_INCLUDE x '.repeat(20_000)],
+    ['an unclosed comment block', `<TMPL_COMMENT>${' '.repeat(50_000)}`],
+    ['many unclosed comment blocks', '<TMPL_COMMENT> '.repeat(20_000)],
+    ['whitespace inside a closed tag', `<TMPL_VAR x${' '.repeat(50_000)}/>`]
+  ])('stays linear on %s', (_name, source) => {
+    expect(elapsed(() => compile(source))).toBeLessThan(LIMIT_MS);
+    expect(elapsed(() => compile(source, { strict: false }))).toBeLessThan(LIMIT_MS);
+  });
+
+  it('still rejects an unclosed tag under strict', () => {
+    expect(() => compile(`text\n<TMPL_VAR${' '.repeat(10_000)}`)).toThrow('malformed tag at line 2');
+  });
 });
 
 describe('filters', () => {

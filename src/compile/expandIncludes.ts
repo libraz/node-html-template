@@ -15,9 +15,9 @@
  */
 
 import { TemplateNotFoundError } from '../loader/errors.js';
-import type { SyncTemplateLoader, TemplateLoader } from '../loader/types.js';
+import type { SyncTemplateLoader, TemplateLoader, TemplateResource } from '../loader/types.js';
 import { type IncludeRef, scanIncludes } from '../parser/scanIncludes.js';
-import { createError } from '../utils/helpers.js';
+import { type MappedStretch, SourceMap, TemplateText, templateError } from '../parser/sourceMap.js';
 
 /**
  * Where a stretch of the expanded text came from.
@@ -47,10 +47,27 @@ export interface ExpandOptions {
   onMissing: 'throw' | 'ignore';
 
   /**
-   * Preprocessing applied to each included template, matching whatever the
-   * entry template already went through.
+   * Transformation applied to every template's text before its comment
+   * blocks are removed.
    */
-  prepare(text: string): string;
+  filter(text: string): string;
+}
+
+/**
+ * The template expansion starts from.
+ */
+export interface EntryTemplate {
+  /** Canonical id, when the template has one */
+  id?: string;
+
+  /** Template text as written */
+  text: string;
+
+  /**
+   * The loader read that produced `text`. Absent for text the caller supplied,
+   * which has no version a cache could check.
+   */
+  resource?: TemplateResource;
 }
 
 /**
@@ -68,11 +85,17 @@ export interface ExpandedSource {
   /** Flattened template text */
   text: string;
 
-  /** Version of every template that went into it, for cache validation */
+  /**
+   * Version of every template read through the loader, each taken from the
+   * same read as the text compiled, for cache validation
+   */
   versions: Map<string, string | undefined>;
 
   /** Map from offsets in `text` back to the templates they came from */
   segments: SourceSegment[];
+
+  /** Map from offsets in `text` back to where they were written */
+  map: SourceMap;
 }
 
 /**
@@ -80,42 +103,28 @@ export interface ExpandedSource {
  */
 interface Unit {
   id: string;
-  text: string;
+  template: TemplateText;
   refs: IncludeRef[];
 
   /** Resolved id per ref index; absent when the include was missing and ignored */
   targets: Map<number, string>;
 
-  version?: string;
+  /** Loader read the text came from; absent for caller-supplied text */
+  resource?: TemplateResource;
 }
 
 /**
  * Expand every include in a template.
  *
- * @param rootText - Entry template text, already preprocessed
- * @param rootId - Canonical id of the entry template, when it came from a loader
+ * @param entry - Entry template
  * @param options - Expansion settings
  * @returns Flattened text with its provenance
  * @throws Error on a cycle, on exceeding the depth limit, or on a missing
  *   include when `onMissing` is `throw`
  */
-export function expandIncludes(rootText: string, rootId: string | undefined, options: ExpandOptions): ExpandedSource {
-  const id = rootId ?? '';
-  const units = collect(rootText, id, options);
-  const root = units.get(id);
-
-  if (!root) {
-    return { text: rootText, versions: new Map(), segments: [] };
-  }
-
-  const versions = new Map<string, string | undefined>();
-  for (const unit of units.values()) {
-    if (unit.id !== '') {
-      versions.set(unit.id, unit.id === id ? options.loader.version?.(id) : unit.version);
-    }
-  }
-
-  return { ...assemble(root, units, options), versions };
+export function expandIncludes(entry: EntryTemplate, options: ExpandOptions): ExpandedSource {
+  const root = unitOf(entry.id ?? '', entry.text, entry.resource, options.filter, true);
+  return finish(root, collect(root, options), options.maxDepth);
 }
 
 /**
@@ -125,34 +134,65 @@ export function expandIncludes(rootText: string, rootId: string | undefined, opt
  * rather than template count bounds the wait. The assembly pass is the same
  * pure code the synchronous entry point uses, so both produce identical text.
  *
- * @param rootText - Entry template text, already preprocessed
- * @param rootId - Canonical id of the entry template, when it came from a loader
+ * @param entry - Entry template
  * @param options - Expansion settings
  * @returns Flattened text with its provenance
  * @throws Error on a cycle, on exceeding the depth limit, or on a missing
  *   include when `onMissing` is `throw`
  */
-export async function expandIncludesAsync(
-  rootText: string,
-  rootId: string | undefined,
-  options: AsyncExpandOptions
-): Promise<ExpandedSource> {
-  const id = rootId ?? '';
-  const units = await collectAsync(rootText, id, options);
-  const root = units.get(id);
+export async function expandIncludesAsync(entry: EntryTemplate, options: AsyncExpandOptions): Promise<ExpandedSource> {
+  const root = unitOf(entry.id ?? '', entry.text, entry.resource, options.filter, true);
+  return finish(root, await collectAsync(root, options), options.maxDepth);
+}
 
-  if (!root) {
-    return { text: rootText, versions: new Map(), segments: [] };
-  }
+/**
+ * Prepare a template whose includes are disabled, without scanning for them.
+ *
+ * @param entry - Entry template
+ * @param filter - Transformation applied before comment removal
+ * @returns The template's own text with its provenance
+ */
+export function withoutIncludes(entry: EntryTemplate, filter: (text: string) => string): ExpandedSource {
+  const root = unitOf(entry.id ?? '', entry.text, entry.resource, filter, false);
+  return finish(root, new Map([[root.id, root]]), 0);
+}
 
+/**
+ * Prepare one template's text.
+ *
+ * @param id - Canonical id, or an empty string for an anonymous entry
+ * @param text - Text as written
+ * @param resource - Loader read the text came from, if any
+ * @param filter - Transformation applied before comment removal
+ * @param scan - Whether to look for includes
+ * @returns Unit ready for expansion
+ */
+function unitOf(
+  id: string,
+  text: string,
+  resource: TemplateResource | undefined,
+  filter: (text: string) => string,
+  scan: boolean
+): Unit {
+  const template = TemplateText.prepare(filter(text), id === '' ? undefined : id);
+  return { id, template, refs: scan ? scanIncludes(template) : [], targets: new Map(), resource };
+}
+
+/**
+ * Assemble the collected templates and record their versions.
+ *
+ * @param root - Entry template
+ * @param units - Every reachable template
+ * @param maxDepth - Maximum include nesting; zero or less means unlimited
+ * @returns Flattened text with its provenance
+ */
+function finish(root: Unit, units: Map<string, Unit>, maxDepth: number): ExpandedSource {
   const versions = new Map<string, string | undefined>();
   for (const unit of units.values()) {
-    if (unit.id !== '') {
-      versions.set(unit.id, unit.id === id ? await options.loader.version?.(id) : unit.version);
-    }
+    if (unit.resource) versions.set(unit.id, unit.resource.version);
   }
 
-  return { ...assemble(root, units, options), versions };
+  return { ...assemble(root, units, maxDepth), versions };
 }
 
 /**
@@ -161,15 +201,12 @@ export async function expandIncludesAsync(
  * Each template is read at most once, so a header included from a dozen places
  * costs one read, and a cycle terminates here rather than looping.
  *
- * @param rootText - Entry template text
- * @param rootId - Canonical id of the entry template
+ * @param root - Entry template
  * @param options - Expansion settings
  * @returns Every reachable template, keyed by id
  */
-function collect(rootText: string, rootId: string, options: ExpandOptions): Map<string, Unit> {
-  const units = new Map<string, Unit>();
-  const root: Unit = { id: rootId, text: rootText, refs: scanIncludes(rootText), targets: new Map() };
-  units.set(rootId, root);
+function collect(root: Unit, options: ExpandOptions): Map<string, Unit> {
+  const units = new Map<string, Unit>([[root.id, root]]);
 
   let level: Unit[] = [root];
 
@@ -185,14 +222,7 @@ function collect(rootText: string, rootId: string, options: ExpandOptions): Map<
         if (units.has(targetId)) continue;
 
         const resource = options.loader.read(targetId);
-        const text = options.prepare(resource.text);
-        const child: Unit = {
-          id: targetId,
-          text,
-          refs: scanIncludes(text),
-          targets: new Map(),
-          version: resource.version
-        };
+        const child = unitOf(targetId, resource.text, resource, options.filter, true);
 
         units.set(targetId, child);
         next.push(child);
@@ -208,15 +238,12 @@ function collect(rootText: string, rootId: string, options: ExpandOptions): Map<
 /**
  * Read every reachable template, one graph level at a time.
  *
- * @param rootText - Entry template text
- * @param rootId - Canonical id of the entry template
+ * @param root - Entry template
  * @param options - Expansion settings
  * @returns Every reachable template, keyed by id
  */
-async function collectAsync(rootText: string, rootId: string, options: AsyncExpandOptions): Promise<Map<string, Unit>> {
-  const units = new Map<string, Unit>();
-  const root: Unit = { id: rootId, text: rootText, refs: scanIncludes(rootText), targets: new Map() };
-  units.set(rootId, root);
+async function collectAsync(root: Unit, options: AsyncExpandOptions): Promise<Map<string, Unit>> {
+  const units = new Map<string, Unit>([[root.id, root]]);
 
   let level: Unit[] = [root];
 
@@ -251,14 +278,7 @@ async function collectAsync(rootText: string, rootId: string, options: AsyncExpa
       const id = toRead[position];
       if (id === undefined) continue;
 
-      const text = options.prepare(resource.text);
-      const child: Unit = {
-        id,
-        text,
-        refs: scanIncludes(text),
-        targets: new Map(),
-        version: resource.version
-      };
+      const child = unitOf(id, resource.text, resource, options.filter, true);
 
       units.set(id, child);
       next.push(child);
@@ -337,29 +357,32 @@ function rethrowUnlessIgnorable(error: unknown, options: { onMissing: 'throw' | 
  *
  * @param root - Entry template
  * @param units - Every reachable template
- * @param options - Expansion settings
- * @returns Flattened text and its segment map
+ * @param maxDepth - Maximum include nesting; zero or less means unlimited
+ * @returns Flattened text, its segment map and its source map
  */
 function assemble(
   root: Unit,
   units: Map<string, Unit>,
-  options: Pick<ExpandOptions, 'maxDepth'>
-): { text: string; segments: SourceSegment[] } {
+  maxDepth: number
+): { text: string; segments: SourceSegment[]; map: SourceMap } {
   const parts: string[] = [];
   const segments: SourceSegment[] = [];
+  const stretches: MappedStretch[] = [];
   let length = 0;
 
   /**
    * Append one stretch of a template's own text.
    *
-   * @param text - Text to append
-   * @param id - Template it came from
-   * @param sourceStart - Offset within that template
+   * @param unit - Template it came from
+   * @param start - Offset within that template
+   * @param end - Offset just past the stretch
    */
-  function push(text: string, id: string, sourceStart: number): void {
+  function push(unit: Unit, start: number, end?: number): void {
+    const text = unit.template.text.slice(start, end);
     if (text.length === 0) return;
 
-    segments.push({ outputStart: length, id, sourceStart });
+    segments.push({ outputStart: length, id: unit.id, sourceStart: start });
+    stretches.push({ outputStart: length, template: unit.template, sourceStart: start });
     parts.push(text);
     length += text.length;
   }
@@ -372,14 +395,14 @@ function assemble(
    * @param stack - Templates currently being emitted, for cycle detection
    */
   function emit(unit: Unit, depth: number, stack: ReadonlySet<string>): void {
-    if (options.maxDepth > 0 && depth >= options.maxDepth) {
-      throw createError(
-        `HTML::Template->new() : likely recursive includes - parsed ${options.maxDepth} files deep and giving up (set max_includes higher to allow deeper recursion).`
+    if (maxDepth > 0 && depth >= maxDepth) {
+      throw templateError(
+        `HTML::Template->new() : likely recursive includes - parsed ${maxDepth} files deep and giving up (set max_includes higher to allow deeper recursion).`
       );
     }
 
     if (stack.has(unit.id)) {
-      throw createError(
+      throw templateError(
         `HTML::Template->new() : likely recursive includes - ${unit.id} includes itself directly or indirectly.`
       );
     }
@@ -388,7 +411,7 @@ function assemble(
     let cursor = 0;
 
     for (const [index, ref] of unit.refs.entries()) {
-      push(unit.text.slice(cursor, ref.start), unit.id, cursor);
+      push(unit, cursor, ref.start);
 
       const targetId = unit.targets.get(index);
       const target = targetId === undefined ? undefined : units.get(targetId);
@@ -399,10 +422,10 @@ function assemble(
       cursor = ref.end;
     }
 
-    push(unit.text.slice(cursor), unit.id, cursor);
+    push(unit, cursor);
   }
 
   emit(root, 0, new Set());
 
-  return { text: parts.join(''), segments };
+  return { text: parts.join(''), segments, map: new SourceMap(stretches) };
 }

@@ -9,9 +9,9 @@
  * @module parser/scanIncludes
  */
 
-import { createError } from '../utils/helpers.js';
-import { parseTagAttributes, TagSyntaxError } from './attributes.js';
-import { createIncludePattern } from './tagPattern.js';
+import { parseTagAttributes, type TagAttributes, TagSyntaxError, validateTagAttributes } from './attributes.js';
+import { type TemplateText, templateError } from './sourceMap.js';
+import { scanTags } from './tagPattern.js';
 
 /**
  * One TMPL_INCLUDE tag found in a template.
@@ -30,22 +30,18 @@ export interface IncludeRef {
 /**
  * Find every include tag in a template.
  *
- * @param text - Template text
- * @returns Includes in source order
- * @throws Error when a tag is malformed or carries no NAME
+ * @param template - Prepared template text
+ * @returns Includes in source order, with offsets into `template.text`
+ * @throws Error naming the template and line when a tag is malformed or
+ *   carries no NAME
  */
-export function scanIncludes(text: string): IncludeRef[] {
-  const pattern = createIncludePattern();
+export function scanIncludes(template: TemplateText): IncludeRef[] {
   const refs: IncludeRef[] = [];
 
-  let match = pattern.exec(text);
-  while (match !== null) {
-    refs.push({
-      start: match.index,
-      end: match.index + match[0].length,
-      name: parseIncludeName(match[1] ?? '')
-    });
-    match = pattern.exec(text);
+  for (const tag of scanTags(template.text)) {
+    if (tag.closing || tag.name.toUpperCase() !== 'INCLUDE') continue;
+
+    refs.push({ start: tag.start, end: tag.end, name: parseIncludeName(tag.attributes, template, tag.start) });
   }
 
   return refs;
@@ -55,24 +51,29 @@ export function scanIncludes(text: string): IncludeRef[] {
  * Extract the NAME of an include tag.
  *
  * @param attributes - Attribute text from the tag
+ * @param template - Template the tag appears in
+ * @param offset - Offset of the tag in the prepared text
  * @returns Template name
  * @throws Error when the tag has no usable NAME
  */
-function parseIncludeName(attributes: string): string {
-  let name: string | undefined;
+function parseIncludeName(attributes: string, template: TemplateText, offset: number): string {
+  let attrs: TagAttributes;
 
   try {
-    name = parseTagAttributes(attributes).name;
+    attrs = parseTagAttributes(attributes);
   } catch (error) {
-    if (error instanceof TagSyntaxError) {
-      throw createError(`Syntax error in <TMPL_INCLUDE> tag: ${error.message}`);
-    }
-    throw error;
+    if (!(error instanceof TagSyntaxError)) throw error;
+    throw templateError(`Syntax error in <TMPL_INCLUDE> tag: ${error.message}`, template.locate(offset));
   }
 
-  if (!name) {
-    throw createError('HTML::Template->new() : No NAME given to a TMPL_INCLUDE tag');
+  if (!attrs.name) {
+    throw templateError('HTML::Template->new() : No NAME given to a TMPL_INCLUDE tag', template.locate(offset));
   }
 
-  return name;
+  const invalid = validateTagAttributes('INCLUDE', attrs);
+  if (invalid) {
+    throw templateError(`Syntax error in <TMPL_INCLUDE> tag: ${invalid}`, template.locate(offset));
+  }
+
+  return attrs.name;
 }

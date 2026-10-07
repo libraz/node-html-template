@@ -5,13 +5,15 @@
  * @module parser/types
  */
 
-/**
- * The text a tokenizer is working through, plus where it came from.
- */
-export interface ParseContext {
-  /** Source template string */
-  source: string;
+import type { Token } from '../types.js';
 
-  /** Template filename, when the source came from disk */
-  filename?: string;
+/**
+ * A token, plus the template that physically contains it.
+ *
+ * Line and column are positions in that template, so the parser reports an
+ * error inside an include against the included file.
+ */
+export interface LocatedToken extends Token {
+  /** Template id, when the template has one */
+  file?: string;
 }

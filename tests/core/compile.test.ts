@@ -316,3 +316,53 @@ describe('compileAsync', () => {
     expect(async).toBe(sync);
   });
 });
+
+describe('defaultEscape', () => {
+  it.each(['HTML', 'Html', 'html'])('accepts the %s spelling', (spelling) => {
+    expect(render('<TMPL_VAR NAME="x">', { x: '<b>' }, { defaultEscape: spelling as never })).toBe('&lt;b&gt;');
+  });
+
+  it("accepts Perl's other upper-case modes", () => {
+    expect(render('<TMPL_VAR NAME="x">', { x: 'a b' }, { defaultEscape: 'URL' as never })).toBe('a%20b');
+  });
+
+  it.each(['htm', '', 'xml', 42])('rejects %j rather than rendering unescaped', async (value) => {
+    const options = { defaultEscape: value as never };
+
+    expect(() => compile('<TMPL_VAR NAME="x">', options)).toThrow(/Invalid defaultEscape/);
+    await expect(compileAsync('<TMPL_VAR NAME="x">', options)).rejects.toThrow(/Invalid defaultEscape/);
+  });
+
+  it('still lets none turn escaping off', () => {
+    expect(render('<TMPL_VAR NAME="x">', { x: '<b>' }, { defaultEscape: 'none' })).toBe('<b>');
+  });
+});
+
+describe('parameter locations', () => {
+  const SOURCE = 'a\n<TMPL_COMMENT>\nskip\nskip\n</TMPL_COMMENT>  <TMPL_VAR NAME="x">\n<TMPL_VAR NAME="y">';
+
+  it('points into the source as written, comment blocks included', async () => {
+    const sync = compile(SOURCE);
+    const async = await compileAsync(SOURCE);
+
+    expect(sync.shape.get('x')?.loc).toEqual({ line: 5, col: 18 });
+    expect(sync.shape.get('y')?.loc).toEqual({ line: 6, col: 1 });
+    expect(async.shape.get('x')?.loc).toEqual(sync.shape.get('x')?.loc);
+    expect(async.shape.get('y')?.loc).toEqual(sync.shape.get('y')?.loc);
+  });
+
+  it('names the template that contains the tag, at any include depth', async () => {
+    const loader = memoryLoader({
+      'part.tmpl': 'one\n  <TMPL_VAR NAME="inner"><TMPL_INCLUDE NAME="deep.tmpl">',
+      'deep.tmpl': 'x\ny\n<TMPL_COMMENT>\n</TMPL_COMMENT><TMPL_LOOP NAME="rows"></TMPL_LOOP>'
+    });
+    const source = 'a\nb\nc\n<TMPL_INCLUDE NAME="part.tmpl"><TMPL_VAR NAME="outer">';
+    const options = { loader, filename: 'page.tmpl' };
+
+    for (const template of [compile(source, options), await compileAsync(source, options)]) {
+      expect(template.shape.get('outer')?.loc).toEqual({ file: 'page.tmpl', line: 4, col: 32 });
+      expect(template.shape.get('inner')?.loc).toEqual({ file: 'part.tmpl', line: 2, col: 3 });
+      expect(template.shape.get('rows')?.loc).toEqual({ file: 'deep.tmpl', line: 4, col: 16 });
+    }
+  });
+});

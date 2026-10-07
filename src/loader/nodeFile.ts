@@ -9,9 +9,9 @@
  * @module loader/nodeFile
  */
 
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, type Stats, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { parseOpenMode } from '../utils/encoding.js';
+import { decoderFor, parseOpenMode } from '../utils/encoding.js';
 import { TemplateNotFoundError } from './errors.js';
 import type { ResolveRequest, SyncTemplateLoader, TemplateResource } from './types.js';
 
@@ -39,7 +39,8 @@ export interface NodeFileLoaderOptions {
 
   /**
    * Encoding used to decode files, in either Node or Perl spelling
-   * (`utf-8`, `<:encoding(utf8)`, `:raw`). Defaults to UTF-8.
+   * (`utf-8`, `<:encoding(utf8)`, `:raw`). Defaults to UTF-8. A name that
+   * does not resolve to a known encoding throws when the loader is built.
    */
   encoding?: string;
 }
@@ -60,7 +61,7 @@ export function nodeFileLoader(options: NodeFileLoaderOptions = {}): SyncTemplat
   const searchAllPaths = options.searchAllPaths ?? false;
   const root = options.root ?? process.env.HTML_TEMPLATE_ROOT;
   const cwd = options.cwd ?? process.cwd();
-  const encoding: BufferEncoding = options.encoding ? parseOpenMode(options.encoding) : 'utf-8';
+  const decode = decoderFor(options.encoding ? parseOpenMode(options.encoding) : 'utf-8');
 
   return {
     sync: true,
@@ -80,7 +81,10 @@ export function nodeFileLoader(options: NodeFileLoaderOptions = {}): SyncTemplat
     },
 
     read(id: string): TemplateResource {
-      return { id, text: readFileSync(id, { encoding }), version: fileVersion(id) };
+      // Stat first: a write racing the read then leaves the recorded version
+      // older than the text, which forces a recompile rather than hiding it.
+      const version = versionOf(statSync(id));
+      return { id, text: decode(readFileSync(id), id), version };
     },
 
     version(id: string): string | undefined {
@@ -137,9 +141,18 @@ function isFile(path: string): boolean {
  */
 export function fileVersion(path: string): string | undefined {
   try {
-    const stats = statSync(path);
-    return `${stats.mtimeMs}:${stats.size}`;
+    return versionOf(statSync(path));
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Format a file's version from its stats.
+ *
+ * @param stats - Result of a stat call
+ * @returns Version string
+ */
+function versionOf(stats: Stats): string {
+  return `${stats.mtimeMs}:${stats.size}`;
 }

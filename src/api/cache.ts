@@ -40,7 +40,7 @@ export type Versions = ReadonlyMap<string, string | undefined>;
  */
 export interface CacheEntry {
   /** The compiled template */
-  template: Template;
+  template: Template<object>;
 
   /** Version of every template it was built from */
   versions: Versions;
@@ -93,7 +93,7 @@ export class TemplateCache {
    * @param template - Compiled template
    * @param versions - Version of every template it was built from
    */
-  set(key: string, template: Template, versions: Versions): void {
+  set(key: string, template: Template<object>, versions: Versions): void {
     this.entries.delete(key);
     this.entries.set(key, { template, versions });
 

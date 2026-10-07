@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { compile, memoryLoader } from '../../src/index.js';
+import { compile, compileAsync, Environment, memoryLoader, TemplateNotFoundError } from '../../src/index.js';
 
 const FILES = {
   'header.tmpl': '<h1>Site Header</h1>\n',
@@ -107,6 +107,24 @@ describe('include settings', () => {
     expect(() => withIncludes('<TMPL_INCLUDE NAME="absent.tmpl">')).toThrow(/absent\.tmpl/);
   });
 
+  it('reports a missing template as the exported TemplateNotFoundError on every compile path', async () => {
+    const loader = memoryLoader(FILES);
+    const env = new Environment({ loader });
+    const source = '<TMPL_INCLUDE NAME="absent.tmpl">';
+    const failures = [
+      catchError(() => compile(source, { loader })),
+      await rejection(compileAsync(source, { loader })),
+      catchError(() => env.compileFile('absent.tmpl')),
+      await rejection(env.compileFileAsync('absent.tmpl'))
+    ];
+
+    for (const error of failures) {
+      expect(error).toBeInstanceOf(TemplateNotFoundError);
+      expect((error as Error).name).toBe('TemplateNotFoundError');
+      expect((error as TemplateNotFoundError).templateName).toBe('absent.tmpl');
+    }
+  });
+
   it('keeps expanding the includes that follow an ignored one', () => {
     const template = withIncludes('<TMPL_INCLUDE NAME="absent.tmpl"><TMPL_INCLUDE NAME="outer.tmpl">', {
       includes: { onMissing: 'ignore' }
@@ -123,3 +141,33 @@ describe('include settings', () => {
     expect(template.render({ name: 'Sam' })).toBe('Hi Sam!');
   });
 });
+
+/**
+ * Capture what a call throws.
+ *
+ * @param fn - Call expected to throw
+ * @returns The thrown value
+ */
+function catchError(fn: () => unknown): unknown {
+  try {
+    fn();
+  } catch (error) {
+    return error;
+  }
+  throw new Error('expected the call to throw');
+}
+
+/**
+ * Capture what a promise rejects with.
+ *
+ * @param promise - Promise expected to reject
+ * @returns The rejection reason
+ */
+async function rejection(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => {
+      throw new Error('expected the promise to reject');
+    },
+    (error: unknown) => error
+  );
+}

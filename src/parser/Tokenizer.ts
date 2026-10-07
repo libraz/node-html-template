@@ -10,36 +10,20 @@
  * @module parser/Tokenizer
  */
 
-import type { Token } from '../types.js';
-import { createError } from '../utils/helpers.js';
-import { parseTagAttributes, type TagAttributes, TagSyntaxError } from './attributes.js';
-import { createTagPattern } from './tagPattern.js';
-import type { ParseContext } from './types.js';
+import { parseTagAttributes, type TagAttributes, TagSyntaxError, validateTagAttributes } from './attributes.js';
+import { type Location, SourceMap, TemplateText, templateError } from './sourceMap.js';
+import { scanTags, TAG_LOOKALIKE } from './tagPattern.js';
+import type { LocatedToken } from './types.js';
 
 // ============================================================================
 // Precompiled Regular Expressions (Module Scope for Maximum Performance)
 // ============================================================================
 
 /**
- * Matches any TMPL_* tag, in plain or HTML-comment form.
- * Captures: leading slash, tag name, attribute text.
- */
-const TAG_REGEX = createTagPattern();
-
-/**
- * Matches anything that merely looks like a TMPL tag opener, used to tell a
- * malformed tag apart from ordinary markup.
- */
-const TAG_LOOKALIKE_REGEX = /<\s*(?:!--\s*)?\/?TMPL_/i;
-
-/**
  * Legacy Vanguard `%NAME%` syntax, using Perl's character class so dotted,
  * hyphenated and path-like names are substituted too.
  */
 const VANGUARD_REGEX = /%([-\w/.+]+)%/g;
-
-/** Tags whose NAME attribute is mandatory */
-const TAGS_NEEDING_NAME = new Set(['VAR', 'LOOP', 'IF', 'UNLESS', 'INCLUDE']);
 
 // ============================================================================
 // Tokenizer Class
@@ -51,18 +35,13 @@ const TAGS_NEEDING_NAME = new Set(['VAR', 'LOOP', 'IF', 'UNLESS', 'INCLUDE']);
  * Converts a template string into a token stream for the parser.
  */
 export class Tokenizer {
-  private context: ParseContext;
+  private readonly source: string;
+
+  private readonly map: SourceMap;
 
   private vanguardMode: boolean;
 
   private strict: boolean;
-
-  /** Running position tracker for O(1) amortized line/col calculation */
-  private trackedPos = 0;
-
-  private trackedLine = 1;
-
-  private trackedCol = 1;
 
   /**
    * Create tokenizer
@@ -71,9 +50,12 @@ export class Tokenizer {
    * @param filename - Optional filename for error messages
    * @param vanguardMode - Enable Vanguard %VAR% syntax
    * @param strict - Treat malformed TMPL_* tags as errors
+   * @param map - Where each offset of `source` was written; defaults to
+   *   `source` itself, as `filename`
    */
-  constructor(source: string, filename?: string, vanguardMode = false, strict = true) {
-    this.context = { source, filename };
+  constructor(source: string, filename?: string, vanguardMode = false, strict = true, map?: SourceMap) {
+    this.source = source;
+    this.map = map ?? SourceMap.of(TemplateText.verbatim(source, filename));
     this.vanguardMode = vanguardMode;
     this.strict = strict;
   }
@@ -83,37 +65,26 @@ export class Tokenizer {
    *
    * @returns Token array
    */
-  tokenize(): Token[] {
-    const tokens: Token[] = [];
-    const { source } = this.context;
-
-    TAG_REGEX.lastIndex = 0;
+  tokenize(): LocatedToken[] {
+    const tokens: LocatedToken[] = [];
+    const source = this.source;
 
     let lastPos = 0;
-    let match: RegExpExecArray | null = TAG_REGEX.exec(source);
 
-    while (match !== null) {
-      const matchStart = match.index;
-      const matchEnd = TAG_REGEX.lastIndex;
-
-      if (matchStart > lastPos) {
-        this.addTextTokens(tokens, source.substring(lastPos, matchStart), lastPos);
+    for (const tag of scanTags(source)) {
+      if (tag.start > lastPos) {
+        this.addTextTokens(tokens, source.substring(lastPos, tag.start), lastPos);
       }
 
-      const isClosing = match[1] === '/';
-      const tagName = match[2]?.toUpperCase() ?? '';
-      const attrString = match[3] ?? '';
-
-      const token = this.createTagToken(tagName, attrString, isClosing, matchStart);
+      const token = this.createTagToken(tag.name.toUpperCase(), tag.attributes, tag.closing, tag.start);
       if (token) {
         tokens.push(token);
       } else {
         // Non-strict mode keeps an unparsable tag as literal text, as Perl does.
-        tokens.push(this.createTextToken(source.substring(matchStart, matchEnd), matchStart));
+        tokens.push(this.createTextToken(source.substring(tag.start, tag.end), tag.start));
       }
 
-      lastPos = matchEnd;
-      match = TAG_REGEX.exec(source);
+      lastPos = tag.end;
     }
 
     if (lastPos < source.length) {
@@ -130,17 +101,14 @@ export class Tokenizer {
    * @param text - Text content
    * @param startPos - Offset of `text` within the source
    */
-  private addTextTokens(tokens: Token[], text: string, startPos: number): void {
+  private addTextTokens(tokens: LocatedToken[], text: string, startPos: number): void {
     if (text.length === 0) return;
 
-    // Text that still looks like a tag means the tag regex never matched it,
+    // Text that still looks like a tag means the tag scan never matched it,
     // which Perl reports as a syntax error rather than passing through.
-    if (this.strict && TAG_LOOKALIKE_REGEX.test(text)) {
-      throw createError(
-        'Syntax error in <TMPL_*> tag: malformed tag',
-        this.context.filename,
-        this.getPosition(startPos).line
-      );
+    const lookalike = this.strict ? TAG_LOOKALIKE.exec(text) : null;
+    if (lookalike) {
+      throw templateError('Syntax error in <TMPL_*> tag: malformed tag', this.map.locate(startPos + lookalike.index));
     }
 
     if (!this.vanguardMode) {
@@ -162,13 +130,7 @@ export class Tokenizer {
 
       const varName = match[1];
       if (varName) {
-        const position = this.getPosition(startPos + matchStart);
-        tokens.push({
-          type: 'VAR',
-          name: varName,
-          line: position.line,
-          col: position.col
-        });
+        tokens.push({ type: 'VAR', name: varName, ...this.at(startPos + matchStart) });
       }
 
       lastPos = VANGUARD_REGEX.lastIndex;
@@ -187,15 +149,8 @@ export class Tokenizer {
    * @param pos - Position in source
    * @returns Text token
    */
-  private createTextToken(content: string, pos: number): Token {
-    const position = this.getPosition(pos);
-
-    return {
-      type: 'TEXT',
-      content,
-      line: position.line,
-      col: position.col
-    };
+  private createTextToken(content: string, pos: number): LocatedToken {
+    return { type: 'TEXT', content, ...this.at(pos) };
   }
 
   /**
@@ -207,8 +162,8 @@ export class Tokenizer {
    * @param pos - Position in source
    * @returns Token, or null when a malformed tag should become literal text
    */
-  private createTagToken(tagName: string, attrString: string, isClosing: boolean, pos: number): Token | null {
-    const position = this.getPosition(pos);
+  private createTagToken(tagName: string, attrString: string, isClosing: boolean, pos: number): LocatedToken | null {
+    const position = this.at(pos);
 
     switch (tagName) {
       case 'VAR':
@@ -236,31 +191,30 @@ export class Tokenizer {
       return this.createClosingToken(tagName, position);
     }
 
-    const validationError = Tokenizer.validateAttributes(tagName, attrs);
+    const validationError = validateTagAttributes(tagName, attrs);
     if (validationError) {
       return this.rejectTag(validationError, position);
     }
 
     switch (tagName) {
       case 'ELSE':
-        return { type: 'ELSE', line: position.line, col: position.col };
+        return { type: 'ELSE', ...position };
       case 'VAR':
         return {
           type: 'VAR',
           name: attrs.name as string,
           escape: attrs.escape,
           default: attrs.default,
-          line: position.line,
-          col: position.col
+          ...position
         };
       case 'LOOP':
-        return { type: 'LOOP', name: attrs.name as string, line: position.line, col: position.col };
+        return { type: 'LOOP', name: attrs.name as string, ...position };
       case 'IF':
-        return { type: 'IF', name: attrs.name as string, line: position.line, col: position.col };
+        return { type: 'IF', name: attrs.name as string, ...position };
       case 'UNLESS':
-        return { type: 'UNLESS', name: attrs.name as string, line: position.line, col: position.col };
+        return { type: 'UNLESS', name: attrs.name as string, ...position };
       default:
-        return { type: 'INCLUDE', name: attrs.name as string, line: position.line, col: position.col };
+        return { type: 'INCLUDE', name: attrs.name as string, ...position };
     }
   }
 
@@ -274,41 +228,16 @@ export class Tokenizer {
    * @param position - Position for error messages
    * @returns Closing token, or null when the tag cannot close anything
    */
-  private createClosingToken(tagName: string, position: { line: number; col: number }): Token | null {
+  private createClosingToken(tagName: string, position: Location): LocatedToken | null {
     switch (tagName) {
       case 'LOOP':
-        return { type: 'ENDLOOP', line: position.line, col: position.col };
+        return { type: 'ENDLOOP', ...position };
       case 'IF':
       case 'UNLESS':
-        return { type: 'ENDIF', closes: tagName, line: position.line, col: position.col };
+        return { type: 'ENDIF', closes: tagName, ...position };
       default:
         return this.rejectTag(`TMPL_${tagName} has no closing form`, position);
     }
-  }
-
-  /**
-   * Check attributes against the rules Perl enforces per tag.
-   *
-   * @param tagName - Uppercased tag name
-   * @param attrs - Parsed attributes
-   * @returns Error message, or undefined when valid
-   */
-  private static validateAttributes(tagName: string, attrs: TagAttributes): string | undefined {
-    if (tagName !== 'VAR') {
-      if (attrs.escape !== undefined) {
-        return `ESCAPE option invalid in a TMPL_${tagName} tag`;
-      }
-      if (attrs.default !== undefined) {
-        return `DEFAULT option invalid in a TMPL_${tagName} tag`;
-      }
-    }
-
-    if (TAGS_NEEDING_NAME.has(tagName) && !attrs.name) {
-      return `No NAME given to a TMPL_${tagName} tag`;
-    }
-
-    // Perl ignores a stray NAME on TMPL_ELSE rather than rejecting it.
-    return undefined;
   }
 
   /**
@@ -318,33 +247,20 @@ export class Tokenizer {
    * @param position - Position for error messages
    * @returns Always null when the error is non-fatal
    */
-  private rejectTag(reason: string, position: { line: number; col: number }): null {
+  private rejectTag(reason: string, position: Location): null {
     if (this.strict) {
-      throw createError(`Syntax error in <TMPL_*> tag: ${reason}`, this.context.filename, position.line);
+      throw templateError(`Syntax error in <TMPL_*> tag: ${reason}`, position);
     }
     return null;
   }
 
   /**
-   * Convert an absolute source offset to a 1-indexed line and column.
-   * Uses running counters, so sequential calls are O(1) amortized.
+   * Locate an offset of the source in the template that contains it.
    *
-   * @param pos - Absolute position in the source string
-   * @returns Line and column
+   * @param pos - Offset in the source
+   * @returns Line and column, plus the template id when there is one
    */
-  private getPosition(pos: number): { line: number; col: number } {
-    const { source } = this.context;
-
-    for (let i = this.trackedPos; i < pos && i < source.length; i++) {
-      if (source[i] === '\n') {
-        this.trackedLine++;
-        this.trackedCol = 1;
-      } else {
-        this.trackedCol++;
-      }
-    }
-    this.trackedPos = pos;
-
-    return { line: this.trackedLine, col: this.trackedCol };
+  private at(pos: number): Location {
+    return this.map.locate(pos);
   }
 }

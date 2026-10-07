@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { SyncTemplateLoader, TemplateLoader, TemplateResource } from '../../src/index.js';
+import type { IncludeOptions, SyncTemplateLoader, TemplateLoader, TemplateResource } from '../../src/index.js';
 import { Environment, memoryLoader } from '../../src/index.js';
 import { nodeFileLoader } from '../../src/loaders/index.js';
 
@@ -79,6 +79,12 @@ describe('Environment', () => {
     const env = new Environment({ loader: asyncLoader({ 'page.tmpl': 'x' }) });
 
     expect(() => env.compileFile('page.tmpl')).toThrow(/compileFileAsync/);
+  });
+
+  it('rejects an unknown default escape instead of rendering unescaped', () => {
+    const env = new Environment({ defaultEscape: 'htm' as never });
+
+    expect(() => env.render('<TMPL_VAR NAME="x">', { x: '<b>' })).toThrow(/Invalid defaultEscape "htm"/);
   });
 });
 
@@ -232,6 +238,136 @@ describe('Environment with an asynchronous loader', () => {
     versions.set('page.tmpl', 'v2');
 
     expect(await env.renderFileAsync('page.tmpl', {})).toBe('after');
+  });
+});
+
+describe('Environment loader selection', () => {
+  /**
+   * Wrap an asynchronous loader so any call on it fails the test.
+   *
+   * @returns Loader that must never be called
+   */
+  function untouchable(): TemplateLoader {
+    const fail = (): never => {
+      throw new Error('loader was called');
+    };
+    return { sync: false, resolve: fail, read: fail, version: fail };
+  }
+
+  it.each([
+    ['compile', (env: Environment) => env.compile('<TMPL_INCLUDE NAME="part.tmpl">')],
+    ['render', (env: Environment) => env.render('<TMPL_INCLUDE NAME="part.tmpl">', {})],
+    ['compileFile', (env: Environment) => env.compileFile('page.tmpl')],
+    ['renderFile', (env: Environment) => env.renderFile('page.tmpl', {})]
+  ])('%s rejects an asynchronous loader before calling it', (_name, call) => {
+    const env = new Environment({ loader: untouchable() });
+
+    expect(() => call(env)).toThrow('The loader is asynchronous; use compileFileAsync or renderFileAsync');
+  });
+
+  it('still compiles include-free text with an asynchronous loader configured', () => {
+    const env = new Environment({ loader: untouchable() });
+
+    expect(env.render('<TMPL_VAR NAME="x">', { x: 'y' })).toBe('y');
+  });
+
+  it('reads the entry and its includes through a per-call loader', () => {
+    const env = new Environment({ loader: memoryLoader({ 'page.tmpl': 'environment' }) });
+    const other = memoryLoader({ 'page.tmpl': 'call [<TMPL_INCLUDE NAME="part.tmpl">]', 'part.tmpl': 'part' });
+
+    expect(env.renderFile('page.tmpl', {}, { loader: other })).toBe('call [part]');
+    expect(env.renderFile('page.tmpl', {})).toBe('environment');
+  });
+
+  it('caches per-call loader compilations apart from the environment loader', () => {
+    const env = new Environment({ loader: memoryLoader({ 'page.tmpl': 'environment' }), cache: true });
+    const other = memoryLoader({ 'page.tmpl': 'call' });
+
+    const first = env.compileFile('page.tmpl', { loader: other });
+
+    expect(env.compileFile('page.tmpl', { loader: other })).toBe(first);
+    expect(env.compileFile('page.tmpl').render({})).toBe('environment');
+    expect(env.cacheSize).toBe(2);
+  });
+
+  it('reads through a per-call asynchronous loader', async () => {
+    const env = new Environment({ loader: memoryLoader({ 'page.tmpl': 'environment' }) });
+
+    expect(await env.renderFileAsync('page.tmpl', {}, { loader: asyncLoader({ 'page.tmpl': 'call' }) })).toBe('call');
+  });
+
+  it('rejects a per-call asynchronous loader on a synchronous method', () => {
+    const env = new Environment({ loader: memoryLoader({ 'page.tmpl': 'environment' }) });
+    const loader = untouchable() as unknown as SyncTemplateLoader;
+
+    expect(() => env.compileFile('page.tmpl', { loader })).toThrow(/compileFileAsync/);
+  });
+});
+
+describe('Environment cache revalidation', () => {
+  it('recompiles after the template changes when includes are off', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'html-template-env-noinc-'));
+    const file = join(scratch, 'changing.tmpl');
+    writeFileSync(file, 'before');
+
+    const env = new Environment({ loader: nodeFileLoader({ paths: [scratch] }), cache: true, includes: false });
+    expect(env.renderFile('changing.tmpl', {})).toBe('before');
+
+    writeFileSync(file, 'after');
+    touchFuture(file);
+
+    expect(env.renderFile('changing.tmpl', {})).toBe('after');
+
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it.each([true, false])('records the entry version from its read, includes %s', (includes) => {
+    let queries = 0;
+    const inner = memoryLoader({ 'page.tmpl': 'x' });
+    const loader: SyncTemplateLoader = {
+      sync: true,
+      resolve: (request) => inner.resolve(request),
+      read: (id) => ({ ...inner.read(id), version: 'read' }),
+      version: () => `queried-${++queries}`
+    };
+
+    const template = new Environment({ loader, cache: true, includes }).compileFile('page.tmpl');
+
+    expect(Object.fromEntries(template.compiled.versions)).toEqual({ 'page.tmpl': 'read' });
+  });
+
+  it('records the entry version from its read on the asynchronous path', async () => {
+    const inner = memoryLoader({ 'page.tmpl': 'x' });
+    const loader: TemplateLoader = {
+      sync: false,
+      resolve: async (request) => inner.resolve(request),
+      read: async (id) => ({ ...inner.read(id), version: 'read' }),
+      version: async () => 'queried'
+    };
+
+    const template = await new Environment({ loader, cache: true }).compileFileAsync('page.tmpl');
+
+    expect(Object.fromEntries(template.compiled.versions)).toEqual({ 'page.tmpl': 'read' });
+  });
+});
+
+describe('Environment include options', () => {
+  // Include lookup belongs to the loader; options it never reads must not
+  // split the cache.
+  it('keys the cache only on include options that change the result', () => {
+    const env = new Environment({ loader: nodeFileLoader({ paths: [directory] }), cache: true });
+    const stray = { paths: ['/elsewhere'], searchAllPaths: true } as unknown as IncludeOptions;
+
+    expect(env.compileFile('page.tmpl', { includes: stray })).toBe(env.compileFile('page.tmpl'));
+  });
+
+  it('does not declare include search options', () => {
+    // @ts-expect-error include search belongs to nodeFileLoader
+    const paths: IncludeOptions = { paths: ['./views'] };
+    // @ts-expect-error include search belongs to nodeFileLoader
+    const searchAllPaths: IncludeOptions = { searchAllPaths: true };
+
+    expect([paths, searchAllPaths]).toHaveLength(2);
   });
 });
 

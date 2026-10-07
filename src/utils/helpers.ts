@@ -20,7 +20,7 @@ export function isFunction(value: unknown): value is Function {
 /**
  * Check if value is truthy (for template conditions)
  * Compatible with Perl's truthiness:
- * - undefined, null, false, 0, '', '0' are falsy
+ * - undefined, null, false, 0, 0n, '', '0' are falsy
  * - Empty arrays are falsy
  * - Everything else is truthy
  *
@@ -31,7 +31,7 @@ export function isTruthy(value: unknown): boolean {
   if (value === undefined || value === null || value === false) {
     return false;
   }
-  if (value === 0 || value === '' || value === '0') {
+  if (value === 0 || value === 0n || value === '' || value === '0') {
     return false;
   }
   if (Array.isArray(value) && value.length === 0) {

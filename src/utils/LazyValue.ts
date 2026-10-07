@@ -5,177 +5,96 @@
  * @module utils/LazyValue
  */
 
-// CachedLazyValue and CachedLazyLoop are tightly coupled and belong together
-
-import type { LazyLoopValue, LazyValue, LoopDataItem, ParamValue } from '../types.js';
+import type { LoopDataItem } from '../types.js';
 import { isFunction } from './helpers.js';
 
 /**
- * Check if value is a lazy value (callback function)
+ * A function value that is called at most once
  *
- * @param value - Value to check
- * @returns True if value is a lazy value
+ * The raw result is cached and interpreted by the reader, so whether the name
+ * is used as a variable, a condition or a loop does not affect the wrapping.
  */
-export function isLazyValue(value: ParamValue): value is LazyValue {
-  return isFunction(value);
-}
-
-/**
- * Check if value is a lazy loop (callback returning array)
- * Note: Cannot distinguish from regular lazy value at runtime,
- * so this just checks if it's a function
- *
- * @param value - Value to check
- * @returns True if value might be a lazy loop
- */
-export function isLazyLoop(value: ParamValue): value is LazyLoopValue {
-  return isFunction(value);
-}
-
-/**
- * Wrapper for cached lazy value
- * Evaluates function once and caches result
- */
-export class CachedLazyValue {
+export class CachedLazy {
   private evaluated = false;
 
-  private cachedValue: string | number | boolean | null | undefined;
+  private cached: unknown;
 
   /**
    * Create cached lazy value
    *
-   * @param lazyFn - Lazy value function
+   * @param lazyFn - Function supplied as a value
    */
-  // Constructor initializes private readonly field
-  constructor(private readonly lazyFn: LazyValue) {}
+  constructor(private readonly lazyFn: () => unknown) {}
 
   /**
-   * Get value (evaluates on first call, returns cached value afterwards)
+   * Get the function's result (evaluates on first call only)
    *
-   * @returns Evaluated value
+   * @returns Raw result
    */
-  getValue(): string | number | boolean | null | undefined {
+  get(): unknown {
     if (!this.evaluated) {
-      this.cachedValue = this.lazyFn();
+      this.cached = this.lazyFn();
       this.evaluated = true;
     }
-    return this.cachedValue;
+    return this.cached;
   }
 }
 
 /**
- * Wrapper for cached lazy loop
- * Evaluates function once and caches result
- */
-export class CachedLazyLoop {
-  private evaluated = false;
-
-  private cachedData: LoopDataItem[] = [];
-
-  /**
-   * Create cached lazy loop
-   *
-   * @param lazyFn - Lazy loop function
-   */
-  // Constructor initializes private readonly field
-  constructor(private readonly lazyFn: LazyLoopValue) {}
-
-  /**
-   * Get loop data (evaluates on first call, returns cached data afterwards)
-   *
-   * @returns Loop data array
-   */
-  getData(): LoopDataItem[] {
-    if (!this.evaluated) {
-      const result = this.lazyFn();
-      // Ensure result is an array
-      if (!Array.isArray(result)) {
-        throw new Error('Lazy loop function must return an array');
-      }
-      this.cachedData = result;
-      this.evaluated = true;
-    }
-    return this.cachedData;
-  }
-}
-
-/**
- * Wrap a lazy value so the render calls it at most once
+ * Resolve a function value, cached or not, to what it returns
  *
- * @param value - Lazy value or regular value
- * @returns Cached wrapper for a function, otherwise the value unchanged
+ * @param value - Stored value
+ * @returns The function's result, or the value itself when it is not a function
  */
-export function maybeCacheLazyValue(value: ParamValue): ParamValue | CachedLazyValue {
-  if (isLazyValue(value)) {
-    return new CachedLazyValue(value);
-  }
-  return value;
-}
-
-/**
- * Wrap a lazy loop so the render calls it at most once
- *
- * @param value - Lazy loop or regular loop data
- * @returns Cached wrapper for a function, otherwise the value unchanged
- */
-export function maybeCacheLazyLoop(value: ParamValue): ParamValue | CachedLazyLoop {
-  if (isLazyLoop(value)) {
-    return new CachedLazyLoop(value as LazyLoopValue);
-  }
-  return value;
-}
-
-/**
- * Get final value from potentially cached lazy value
- *
- * @param value - Value (may be cached lazy value)
- * @returns Evaluated value
- */
-export function getFinalValue(value: unknown): string | number | boolean | null | undefined {
-  if (value instanceof CachedLazyValue) {
-    return value.getValue();
+export function resolveLazy(value: unknown): unknown {
+  if (value instanceof CachedLazy) {
+    return value.get();
   }
   if (isFunction(value)) {
     return value();
   }
-  // Filter out arrays (loop data) - those should use getFinalLoopData
-  if (Array.isArray(value)) {
-    return undefined;
-  }
-  // Return primitive values
+  return value;
+}
+
+/**
+ * Get the scalar a value renders as
+ *
+ * @param value - Stored value (may be lazy)
+ * @returns Scalar value, or undefined for loop data and other non-scalars
+ */
+export function getFinalValue(value: unknown): string | number | boolean | null | undefined {
+  const resolved = resolveLazy(value);
+
   if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean' ||
-    value === null ||
-    value === undefined
+    typeof resolved === 'string' ||
+    typeof resolved === 'number' ||
+    typeof resolved === 'boolean' ||
+    resolved === null ||
+    resolved === undefined
   ) {
-    return value;
+    return resolved;
   }
-  // Unknown type - return undefined
   return undefined;
 }
 
 /**
- * Get final loop data from potentially cached lazy loop
+ * Get the rows a value iterates over
  *
- * @param value - Value (may be cached lazy loop or loop data)
- * @returns Loop data array
+ * @param value - Stored value (may be lazy)
+ * @returns Loop rows, empty for anything that is not loop data
+ * @throws Error when a function value returns something other than an array
  */
 export function getFinalLoopData(value: unknown): LoopDataItem[] {
-  if (value instanceof CachedLazyLoop) {
-    return value.getData();
-  }
-  if (isFunction(value)) {
-    const result = value();
-    if (!Array.isArray(result)) {
-      throw new Error('Lazy loop function must return an array');
-    }
-    return result;
-  }
   if (Array.isArray(value)) {
     return value as LoopDataItem[];
   }
-  // Invalid loop data
-  return [];
+  if (!(value instanceof CachedLazy) && !isFunction(value)) {
+    return [];
+  }
+
+  const resolved = resolveLazy(value);
+  if (!Array.isArray(resolved)) {
+    throw new Error('Lazy loop function must return an array');
+  }
+  return resolved as LoopDataItem[];
 }

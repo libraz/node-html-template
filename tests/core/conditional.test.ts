@@ -45,6 +45,23 @@ describe('TMPL_IF truthiness', () => {
   it('treats null as false', () => {
     expect(branch(null)).toBe('');
   });
+
+  it('treats objects and non-zero bigints as true, and bigint zero as false', () => {
+    expect(branch({})).toBe('yes');
+    expect(branch({ n: 1 })).toBe('yes');
+    expect(branch(10n)).toBe('yes');
+    expect(branch(0n)).toBe('');
+  });
+
+  it('judges what a function returns by the same rules', () => {
+    for (const memoizeLazy of [true, false]) {
+      const template = compile('<TMPL_IF NAME="x">yes</TMPL_IF>');
+
+      expect(template.render({ x: () => ({ n: 1 }) as never }, { memoizeLazy })).toBe('yes');
+      expect(template.render({ x: () => 10n as never }, { memoizeLazy })).toBe('yes');
+      expect(template.render({ x: () => '0' }, { memoizeLazy })).toBe('');
+    }
+  });
 });
 
 describe('TMPL_ELSE', () => {

@@ -104,6 +104,81 @@ describe('a function in place of loop data', () => {
   });
 });
 
+describe('memoizeLazy changes call counts only', () => {
+  const render = (template: ReturnType<typeof compile>, data: Record<string, unknown>, memoizeLazy: boolean) => {
+    const text = template.render(data, { memoizeLazy });
+
+    expect([...template.renderChunks(data, { memoizeLazy })].join('')).toBe(text);
+    return text;
+  };
+
+  it('decides TMPL_IF and TMPL_UNLESS on a loop supplied as a function by its rows', () => {
+    const template = compile(
+      '<TMPL_IF NAME="items">yes<TMPL_ELSE>no</TMPL_IF>|<TMPL_UNLESS NAME="items">empty</TMPL_UNLESS>|' +
+        '<TMPL_LOOP NAME="items"><TMPL_VAR NAME="x"></TMPL_LOOP>'
+    );
+
+    for (const memoizeLazy of [true, false]) {
+      expect(render(template, { items: () => [{ x: 1 }, { x: 2 }] }, memoizeLazy)).toBe('yes||12');
+      expect(render(template, { items: () => [] }, memoizeLazy)).toBe('no|empty|');
+    }
+  });
+
+  it('reaches a lazy loop through globalVars from inside another loop', () => {
+    const template = compile(
+      '<TMPL_LOOP NAME="outer"><TMPL_LOOP NAME="inner"><TMPL_VAR NAME="n"></TMPL_LOOP></TMPL_LOOP>',
+      { globalVars: true }
+    );
+
+    for (const memoizeLazy of [true, false]) {
+      expect(render(template, { outer: [{}, {}], inner: () => [{ n: 1 }, { n: 2 }] }, memoizeLazy)).toBe('1212');
+    }
+  });
+
+  it('renders a function returning rows as an empty variable, like the rows themselves', () => {
+    const template = compile('[<TMPL_VAR NAME="v">]');
+
+    for (const memoizeLazy of [true, false]) {
+      expect(render(template, { v: () => [{ n: 1 }] as never }, memoizeLazy)).toBe('[]');
+    }
+  });
+
+  it('calls a function in a loop row once per render when on, per reference when off', () => {
+    const template = compile(
+      '<TMPL_LOOP NAME="r"><TMPL_VAR NAME="v"><TMPL_VAR NAME="v"><TMPL_IF NAME="v">!</TMPL_IF></TMPL_LOOP>' +
+        '<TMPL_LOOP NAME="r"><TMPL_VAR NAME="v"></TMPL_LOOP>'
+    );
+    const count = (memoizeLazy: boolean) => {
+      let calls = 0;
+      const v = () => {
+        calls += 1;
+        return 'x';
+      };
+      expect(template.render({ r: [{ v }] }, { memoizeLazy })).toBe('xx!x');
+      return calls;
+    };
+
+    expect(count(true)).toBe(1);
+    expect(count(false)).toBe(4);
+  });
+
+  it('calls a function returned by resolve once per render when on, per reference when off', () => {
+    const template = compile('<TMPL_VAR NAME="v"><TMPL_VAR NAME="v"><TMPL_IF NAME="v">!</TMPL_IF>');
+    const count = (memoizeLazy: boolean) => {
+      let calls = 0;
+      const resolve = () => () => {
+        calls += 1;
+        return 'x';
+      };
+      expect(template.render({}, { memoizeLazy, resolve })).toBe('xx!');
+      return calls;
+    };
+
+    expect(count(true)).toBe(1);
+    expect(count(false)).toBe(3);
+  });
+});
+
 describe('a value of the wrong kind', () => {
   it('renders a variable given loop data as empty', () => {
     expect(compile('<TMPL_VAR NAME="v">').render({ v: [{ n: 1 }] as never })).toBe('');

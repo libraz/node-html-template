@@ -9,13 +9,12 @@
  * @module api/Template
  */
 
-import { declKind, type ShapeNode } from '../parser/shape.js';
+import type { ShapeNode } from '../parser/shape.js';
 import { renderChunks } from '../runtime/chunks.js';
 import { Executor, type ExecutorOptions, StringSink } from '../runtime/Executor.js';
 import { RenderState } from '../runtime/RenderState.js';
 import type { EscapeType, ParamValue, ParseNode } from '../types.js';
 import { createError } from '../utils/helpers.js';
-import { maybeCacheLazyLoop, maybeCacheLazyValue } from '../utils/LazyValue.js';
 import { createShapeView } from './shape.js';
 import type { OutputSink, RenderOptions, TemplateData, TemplateShape } from './types.js';
 
@@ -60,7 +59,7 @@ export interface CompiledTemplate {
  * environment can hand back a cached instance and so an asynchronous loader
  * can be awaited before the template exists.
  */
-export class Template<T extends TemplateData = TemplateData> {
+export class Template<T extends object = TemplateData> {
   /** Parameters the template declares */
   readonly shape: TemplateShape;
 
@@ -156,41 +155,17 @@ export class Template<T extends TemplateData = TemplateData> {
         caseSensitive: this.compiled.caseSensitive,
         globalVars: this.compiled.globalVars,
         loopContextVars: options.loopContextVars ?? false,
+        memoizeLazy: options.memoizeLazy ?? true,
         resolve: resolve ? (name) => resolve(name) as ParamValue : undefined
       },
       this.compiled.lookupShape
     );
 
-    const memoize = options.memoizeLazy ?? true;
     for (const [name, value] of Object.entries(data)) {
-      state.set(name, this.toParamValue(name, value, memoize));
+      state.set(name, value as ParamValue);
     }
 
     return state;
-  }
-
-  /**
-   * Adapt a caller-supplied value to what the runtime stores.
-   *
-   * A callback returning rows and one returning a scalar are the same thing at
-   * runtime, so which memoisation wrapper applies is decided from what the
-   * template declares the name to be.
-   *
-   * @param name - Parameter name
-   * @param value - Value from the data object
-   * @param memoize - Whether a function value is called at most once per render
-   * @returns Value in runtime form
-   */
-  private toParamValue(name: string, value: unknown, memoize: boolean): ParamValue {
-    if (!memoize || typeof value !== 'function') {
-      return value as ParamValue;
-    }
-
-    const key = this.compiled.caseSensitive ? name : name.toLowerCase();
-    const decl = this.compiled.lookupShape.decls.get(key);
-    const isLoop = decl ? declKind(decl) === 'LOOP' : false;
-
-    return (isLoop ? maybeCacheLazyLoop(value as ParamValue) : maybeCacheLazyValue(value as ParamValue)) as ParamValue;
   }
 
   /**

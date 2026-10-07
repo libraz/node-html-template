@@ -128,12 +128,14 @@ export type ParseNodeType =
 /**
  * Position of a tag in the template source.
  *
- * Lines and columns are 1-based. Positions refer to the source after include
- * expansion, so a tag that came from an included file reports where it landed
- * in the flattened text.
+ * Lines and columns are 1-based and refer to the template that physically
+ * contains the tag, as written: a tag from an included file names that file
+ * and its own line, and comment blocks still count.
  * @internal
  */
 export interface SourceLoc {
+  /** Template id, when the containing template has one */
+  file?: string;
   line: number;
   col: number;
 }

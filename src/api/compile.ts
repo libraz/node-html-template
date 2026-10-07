@@ -4,12 +4,20 @@
  * @module api/compile
  */
 
-import { type ExpandOptions, expandIncludes, expandIncludesAsync } from '../compile/expandIncludes.js';
+import {
+  type EntryTemplate,
+  type ExpandedSource,
+  type ExpandOptions,
+  expandIncludes,
+  expandIncludesAsync,
+  withoutIncludes
+} from '../compile/expandIncludes.js';
 import type { ResolveRequest, SyncTemplateLoader } from '../loader/types.js';
-import { stripComments } from '../parser/comments.js';
+import { resolveEscapeType, TagSyntaxError } from '../parser/attributes.js';
 import { Parser } from '../parser/Parser.js';
 import { buildShape, withGlobalVars } from '../parser/shape.js';
 import { Tokenizer } from '../parser/Tokenizer.js';
+import type { EscapeType } from '../types.js';
 import { applyFilters } from '../utils/filters.js';
 import { createError } from '../utils/helpers.js';
 import { type CompiledTemplate, Template } from './Template.js';
@@ -21,7 +29,8 @@ import type { AsyncCompileOptions, CompileOptions, IncludeOptions, RenderOptions
  * @param source - Template text
  * @param options - Compile settings
  * @returns Compiled template, reusable across renders
- * @throws Error on a malformed tag, a missing include or a cyclic include
+ * @throws Error on a malformed tag, a missing include, a cyclic include or an
+ *   unknown `defaultEscape`
  *
  * @example
  * ```ts
@@ -29,21 +38,8 @@ import type { AsyncCompileOptions, CompileOptions, IncludeOptions, RenderOptions
  * template.render({ title: 'Hello' });
  * ```
  */
-export function compile<T extends TemplateData = TemplateData>(
-  source: string,
-  options: CompileOptions = {}
-): Template<T> {
-  const settings = resolveSettings(options);
-  const prepared = settings.prepare(source);
-
-  const expanded = settings.includes
-    ? expandIncludes(prepared, options.filename, {
-        ...settings.expand,
-        loader: options.loader ?? NO_LOADER
-      })
-    : { text: prepared, versions: new Map<string, string | undefined>(), segments: [] };
-
-  return new Template<T>(assemble(expanded.text, expanded.versions, settings, options));
+export function compile<T extends object = TemplateData>(source: string, options: CompileOptions = {}): Template<T> {
+  return compileEntry<T>({ id: options.filename, text: source }, options);
 }
 
 /**
@@ -52,23 +48,57 @@ export function compile<T extends TemplateData = TemplateData>(
  * @param source - Template text
  * @param options - Compile settings
  * @returns Compiled template, reusable across renders
- * @throws Error on a malformed tag, a missing include or a cyclic include
+ * @throws Error on a malformed tag, a missing include, a cyclic include or an
+ *   unknown `defaultEscape`
  */
-export async function compileAsync<T extends TemplateData = TemplateData>(
+export async function compileAsync<T extends object = TemplateData>(
   source: string,
   options: AsyncCompileOptions = {}
 ): Promise<Template<T>> {
+  return compileEntryAsync<T>({ id: options.filename, text: source }, options);
+}
+
+/**
+ * Compile an entry template.
+ *
+ * {@link Environment} passes the loader read its text came from, so the
+ * version recorded for cache validation is the one that read returned.
+ *
+ * @param entry - Entry template
+ * @param options - Compile settings
+ * @returns Compiled template
+ * @internal
+ */
+export function compileEntry<T extends object = TemplateData>(
+  entry: EntryTemplate,
+  options: CompileOptions
+): Template<T> {
   const settings = resolveSettings(options);
-  const prepared = settings.prepare(source);
-
   const expanded = settings.includes
-    ? await expandIncludesAsync(prepared, options.filename, {
-        ...settings.expand,
-        loader: options.loader ?? NO_LOADER
-      })
-    : { text: prepared, versions: new Map<string, string | undefined>(), segments: [] };
+    ? expandIncludes(entry, { ...settings.expand, loader: options.loader ?? NO_LOADER })
+    : withoutIncludes(entry, settings.expand.filter);
 
-  return new Template<T>(assemble(expanded.text, expanded.versions, settings, options));
+  return new Template<T>(assemble(expanded, settings, options));
+}
+
+/**
+ * Compile an entry template, reading includes through an asynchronous loader.
+ *
+ * @param entry - Entry template
+ * @param options - Compile settings
+ * @returns Compiled template
+ * @internal
+ */
+export async function compileEntryAsync<T extends object = TemplateData>(
+  entry: EntryTemplate,
+  options: AsyncCompileOptions
+): Promise<Template<T>> {
+  const settings = resolveSettings(options);
+  const expanded = settings.includes
+    ? await expandIncludesAsync(entry, { ...settings.expand, loader: options.loader ?? NO_LOADER })
+    : withoutIncludes(entry, settings.expand.filter);
+
+  return new Template<T>(assemble(expanded, settings, options));
 }
 
 /**
@@ -82,7 +112,7 @@ export async function compileAsync<T extends TemplateData = TemplateData>(
  * @param options - Compile and render settings
  * @returns Rendered text
  */
-export function render<T extends TemplateData = TemplateData>(
+export function render<T extends object = TemplateData>(
   source: string,
   data: T,
   options: CompileOptions & RenderOptions = {}
@@ -97,12 +127,10 @@ interface Settings {
   strict: boolean;
   caseSensitive: boolean;
   globalVars: boolean;
-  defaultEscape: CompileOptions['defaultEscape'];
+  defaultEscape: EscapeType;
   percentVars: boolean;
   includes: boolean;
-  includeOptions: IncludeOptions;
   expand: Omit<ExpandOptions, 'loader'>;
-  prepare(text: string): string;
 }
 
 /**
@@ -110,28 +138,47 @@ interface Settings {
  *
  * @param options - Compile settings
  * @returns Settings with every default filled in
+ * @throws Error when `defaultEscape` names no escape mode
  */
 function resolveSettings(options: CompileOptions | AsyncCompileOptions): Settings {
   const includes = options.includes ?? true;
   const includeOptions: IncludeOptions = typeof includes === 'object' ? includes : {};
   const filters = options.filters ?? [];
-  const prepare = (text: string): string => stripComments(applyFilters(text, [...filters]));
 
   return {
     strict: options.strict ?? true,
     caseSensitive: options.caseSensitive ?? true,
     globalVars: options.globalVars ?? false,
-    defaultEscape: options.defaultEscape ?? 'html',
+    defaultEscape: resolveDefaultEscape(options.defaultEscape),
     percentVars: options.legacy?.percentVars ?? false,
     includes: includes !== false,
-    includeOptions,
     expand: {
       maxDepth: includeOptions.maxDepth ?? 10,
       onMissing: includeOptions.onMissing ?? 'throw',
-      prepare
-    },
-    prepare
+      filter: (text) => applyFilters(text, [...filters])
+    }
   };
+}
+
+/**
+ * Validate the default escape, accepting the spellings an ESCAPE attribute
+ * accepts (so Perl's `HTML`, `URL` and `JS` work too).
+ *
+ * @param value - Caller's `defaultEscape`
+ * @returns Escape mode, `html` when unset
+ * @throws Error for anything that is not an escape mode, rather than letting
+ *   it render unescaped
+ */
+function resolveDefaultEscape(value: unknown): EscapeType {
+  if (value === undefined) return 'html';
+
+  try {
+    if (typeof value === 'string') return resolveEscapeType(value);
+  } catch (error) {
+    if (!(error instanceof TagSyntaxError)) throw error;
+  }
+
+  throw createError(`Invalid defaultEscape ${JSON.stringify(value)}; expected 'html', 'js', 'url' or 'none'`);
 }
 
 /**
@@ -158,19 +205,17 @@ const NO_LOADER: SyncTemplateLoader = {
 /**
  * Tokenize, parse and describe an expanded template.
  *
- * @param text - Fully expanded template text
- * @param versions - Version of every template it was built from
+ * @param expanded - Fully expanded template and its provenance
  * @param settings - Resolved compile settings
  * @param options - Caller's options, for the filename
  * @returns Compiled form
  */
 function assemble(
-  text: string,
-  versions: Map<string, string | undefined>,
+  { text, versions, map }: ExpandedSource,
   settings: Settings,
   options: CompileOptions | AsyncCompileOptions
 ): CompiledTemplate {
-  const tokens = new Tokenizer(text, options.filename, settings.percentVars, settings.strict).tokenize();
+  const tokens = new Tokenizer(text, options.filename, settings.percentVars, settings.strict, map).tokenize();
   const nodes = new Parser(tokens, options.filename, !settings.includes).parse();
   const shape = buildShape(nodes, settings.caseSensitive);
 
@@ -180,7 +225,7 @@ function assemble(
     lookupShape: settings.globalVars ? withGlobalVars(shape) : shape,
     caseSensitive: settings.caseSensitive,
     globalVars: settings.globalVars,
-    defaultEscape: settings.defaultEscape ?? 'html',
+    defaultEscape: settings.defaultEscape,
     filename: options.filename,
     versions
   };
