@@ -24,6 +24,12 @@ render<T>(source: string, data: T, options?: CompileOptions & RenderOptions): st
 
 コンパイルと描画をまとめて行います。毎回パースし直すので、2 回以上描画するなら `compile` を使ってください。
 
+```typescript
+renderAsync<T>(source: string, data: T, options?: AsyncCompileOptions & RenderOptions): Promise<string>
+```
+
+Promise を返すローダー向けの同等品です。
+
 ## CompileOptions
 
 | オプション           | 既定値   | 効果                                                                                                                |
@@ -44,10 +50,10 @@ render<T>(source: string, data: T, options?: CompileOptions & RenderOptions): st
 
 `true` 以上の指定が必要なとき、`includes` に渡します。インクルード名をどこから探すかはローダーの役割です。ファイルなら `nodeFileLoader` の `paths` と `searchAllPaths` で指定します。
 
-| オプション  | 既定値    | 効果                                           |
-| ----------- | --------- | ---------------------------------------------- |
-| `maxDepth`  | `10`      | 最大ネスト深度。0 以下で無制限                 |
-| `onMissing` | `'throw'` | 存在しないテンプレートを指すインクルードの扱い |
+| オプション  | 既定値    | 効果                                                |
+| ----------- | --------- | --------------------------------------------------- |
+| `maxDepth`  | `10`      | 最大ネスト深度。`Infinity`（または 0 以下）で無制限 |
+| `onMissing` | `'throw'` | 存在しないテンプレートを指すインクルードの扱い      |
 
 ## Template
 
@@ -122,17 +128,19 @@ new Environment(options?: EnvironmentOptions)
 | メソッド                                | 戻り値              |
 | --------------------------------------- | ------------------- |
 | `compile(source, options?)`             | `Template`          |
+| `compileAsync(source, options?)`        | `Promise<Template>` |
 | `compileFile(name, options?)`           | `Template`          |
 | `compileFileAsync(name, options?)`      | `Promise<Template>` |
 | `render(source, data, options?)`        | `string`            |
+| `renderAsync(source, data, options?)`   | `Promise<string>`   |
 | `renderFile(name, data, options?)`      | `string`            |
 | `renderFileAsync(name, data, options?)` | `Promise<string>`   |
 | `clearCache()`                          | `void`              |
 | `cacheSize`                             | `number`            |
 
-呼び出しごとのオプションは Environment の既定値を上書きします。`loader` も例外ではなく、ファイル系メソッドはテンプレート本体・そのインクルード・キャッシュのすべてに対してこれを使います。`compileFileAsync` と `renderFileAsync` は `AsyncCompileOptions` を取るので、`loader` には Promise を返すものも渡せます。
+呼び出しごとのオプションは Environment の既定値を上書きします。`loader` も例外ではなく、ファイル系メソッドはテンプレート本体・そのインクルード・キャッシュのすべてに対してこれを使います。`Async` の付くメソッドは `AsyncCompileOptions` を取るので、`loader` には Promise を返すものも渡せます。
 
-同期メソッドは、非同期ローダーにテンプレートを要求した最初の時点で「The loader is asynchronous; use compileFileAsync or renderFileAsync」を投げます。
+同期メソッドは、非同期ローダーにテンプレートを要求した最初の時点で「The loader is asynchronous; use compileAsync, compileFileAsync, renderAsync or renderFileAsync」を投げます。
 
 ### CacheOptions
 
@@ -215,7 +223,18 @@ fileVersion(path: string): string | undefined
 
 `TemplateNotFoundError` は、名前が何にも解決できなかったときにローダーが投げます。`onMissing: 'ignore'` が握り潰すのはこの型だけです。
 
-それ以外はプレーンな `Error` で、テンプレート名と、パーサーが把握していれば行番号を伴います。インクルードされたテンプレート内のタグなら、そのテンプレートの名前と、そのテンプレート自身での行番号です。
+`TemplateSyntaxError` は、テンプレートのテキスト自体に誤りがあるときに投げます。壊れたタグ、ブロックの入れ子の誤り、`includes` が `false` のときの `TMPL_INCLUDE` が該当します。判明している範囲で `file`・`line`・`col` を持ち、インクルードされたテンプレート内のタグなら、そのテンプレートとその中での位置を指します。
+
+```typescript
+try {
+  compile(source, { filename: 'page.tmpl' });
+} catch (error) {
+  if (error instanceof TemplateSyntaxError) console.error(error.file, error.line, error.col);
+  else throw error;
+}
+```
+
+それ以外（インクルードの循環や深さ超過、ローダー未設定、不正なオプションなど）はプレーンな `Error` で、分かる範囲でメッセージにテンプレート名を含みます。
 
 ## 型生成
 

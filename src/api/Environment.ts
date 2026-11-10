@@ -10,12 +10,13 @@
 
 import type { SyncTemplateLoader, TemplateLoader } from '../loader/types.js';
 import { type CacheOptions, TemplateCache, type Versions } from './cache.js';
-import { compile, compileEntry, compileEntryAsync } from './compile.js';
+import { compile, compileAsync, compileEntry, compileEntryAsync } from './compile.js';
 import type { Template } from './Template.js';
 import type { AsyncCompileOptions, CompileOptions, RenderOptions, TemplateData } from './types.js';
 
 /** Raised when a synchronous method would have to call an asynchronous loader */
-const ASYNC_LOADER_MESSAGE = 'The loader is asynchronous; use compileFileAsync or renderFileAsync';
+const ASYNC_LOADER_MESSAGE =
+  'The loader is asynchronous; use compileAsync, compileFileAsync, renderAsync or renderFileAsync';
 
 /**
  * Stands in for an asynchronous loader on a synchronous path.
@@ -108,6 +109,20 @@ export class Environment {
   }
 
   /**
+   * Compile template text, reading includes through an asynchronous loader.
+   *
+   * @param source - Template text
+   * @param options - Settings overriding the environment's own
+   * @returns Compiled template
+   */
+  async compileAsync<T extends object = TemplateData>(
+    source: string,
+    options: AsyncCompileOptions = {}
+  ): Promise<Template<T>> {
+    return compileAsync<T>(source, { ...this.settings(options), loader: this.loaderFor(options, false) });
+  }
+
+  /**
    * Compile a template read through the loader.
    *
    * @param name - Template name, resolved by the loader
@@ -182,6 +197,23 @@ export class Environment {
     options: CompileOptions & RenderOptions = {}
   ): string {
     return this.compile<T>(source, options).render(data, options);
+  }
+
+  /**
+   * Compile template text and render it, reading includes through an
+   * asynchronous loader.
+   *
+   * @param source - Template text
+   * @param data - Values for the template's parameters
+   * @param options - Compile and render settings
+   * @returns Rendered text
+   */
+  async renderAsync<T extends object = TemplateData>(
+    source: string,
+    data: T,
+    options: AsyncCompileOptions & RenderOptions = {}
+  ): Promise<string> {
+    return (await this.compileAsync<T>(source, options)).render(data, options);
   }
 
   /**

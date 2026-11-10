@@ -17,7 +17,7 @@
 import { TemplateNotFoundError } from '../loader/errors.js';
 import type { SyncTemplateLoader, TemplateLoader, TemplateResource } from '../loader/types.js';
 import { type IncludeRef, scanIncludes } from '../parser/scanIncludes.js';
-import { type MappedStretch, SourceMap, TemplateText, templateError } from '../parser/sourceMap.js';
+import { type MappedStretch, SourceMap, TemplateText } from '../parser/sourceMap.js';
 
 /**
  * Where a stretch of the expanded text came from.
@@ -396,13 +396,13 @@ function assemble(
    */
   function emit(unit: Unit, depth: number, stack: ReadonlySet<string>): void {
     if (maxDepth > 0 && depth >= maxDepth) {
-      throw templateError(
-        `HTML::Template->new() : likely recursive includes - parsed ${maxDepth} files deep and giving up (set max_includes higher to allow deeper recursion).`
+      throw new Error(
+        `HTML::Template->new() : likely recursive includes - parsed ${maxDepth} files deep and giving up (raise includes.maxDepth to allow deeper recursion).`
       );
     }
 
     if (stack.has(unit.id)) {
-      throw templateError(
+      throw new Error(
         `HTML::Template->new() : likely recursive includes - ${unit.id} includes itself directly or indirectly.`
       );
     }

@@ -262,7 +262,9 @@ describe('Environment loader selection', () => {
   ])('%s rejects an asynchronous loader before calling it', (_name, call) => {
     const env = new Environment({ loader: untouchable() });
 
-    expect(() => call(env)).toThrow('The loader is asynchronous; use compileFileAsync or renderFileAsync');
+    expect(() => call(env)).toThrow(
+      'The loader is asynchronous; use compileAsync, compileFileAsync, renderAsync or renderFileAsync'
+    );
   });
 
   it('still compiles include-free text with an asynchronous loader configured', () => {

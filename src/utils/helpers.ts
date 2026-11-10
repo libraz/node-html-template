@@ -53,6 +53,25 @@ export function normalizeParamName(name: string, caseSensitive: boolean): string
 }
 
 /**
+ * Append a location to an error message
+ *
+ * @param message - Error message
+ * @param filename - Optional filename for context
+ * @param line - Optional line number
+ * @returns Message naming the file and line
+ */
+export function locateMessage(message: string, filename?: string, line?: number): string {
+  let msg = message;
+  if (filename) {
+    msg = `${message} in file ${filename}`;
+  }
+  if (line !== undefined) {
+    msg = `${msg} at line ${line}`;
+  }
+  return msg;
+}
+
+/**
  * Create error message with file context
  *
  * @param message - Error message
@@ -61,12 +80,5 @@ export function normalizeParamName(name: string, caseSensitive: boolean): string
  * @returns Formatted error message
  */
 export function createError(message: string, filename?: string, line?: number): Error {
-  let msg = message;
-  if (filename) {
-    msg = `${message} in file ${filename}`;
-  }
-  if (line !== undefined) {
-    msg = `${msg} at line ${line}`;
-  }
-  return new Error(msg);
+  return new Error(locateMessage(message, filename, line));
 }

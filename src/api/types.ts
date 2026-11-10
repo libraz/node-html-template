@@ -40,10 +40,10 @@ export type { Sink as OutputSink } from '../runtime/Executor.js';
  * see `nodeFileLoader`'s `paths` and `searchAllPaths`.
  */
 export interface IncludeOptions {
-  /** Maximum nesting depth; zero or less means unlimited. Defaults to 10. */
+  /** Maximum nesting depth; `Infinity` (or zero or less) means unlimited. Defaults to 10. */
   maxDepth?: number;
 
-  /** What to do about an include naming a template that does not exist */
+  /** What to do about an include naming a template that does not exist. Defaults to `throw`. */
   onMissing?: 'throw' | 'ignore';
 }
 
@@ -51,7 +51,7 @@ export interface IncludeOptions {
  * Legacy syntax that is off unless a template needs it.
  */
 export interface LegacyOptions {
-  /** Substitute `%NAME%` as well as TMPL_VAR tags */
+  /** Substitute `%NAME%` as well as TMPL_VAR tags. Defaults to false. */
   percentVars?: boolean;
 }
 
@@ -68,7 +68,7 @@ export interface CompileOptions {
    */
   filename?: string;
 
-  /** Treat a malformed TMPL tag as an error rather than literal text */
+  /** Treat a malformed TMPL tag as an error rather than literal text. Defaults to true. */
   strict?: boolean;
 
   /**
@@ -82,10 +82,10 @@ export interface CompileOptions {
   /** Whether parameter names are matched case-sensitively. Defaults to true. */
   caseSensitive?: boolean;
 
-  /** Let a name unresolved inside a loop fall back to enclosing scopes */
+  /** Let a name unresolved inside a loop fall back to enclosing scopes. Defaults to false. */
   globalVars?: boolean;
 
-  /** Include handling; `false` rejects any TMPL_INCLUDE in the template */
+  /** Include handling; `false` rejects any TMPL_INCLUDE in the template. Defaults to true. */
   includes?: boolean | IncludeOptions;
 
   /** Transformations applied to the source text before parsing */
@@ -122,7 +122,7 @@ export interface RenderOptions {
 
   /**
    * Provide `__first__`, `__last__`, `__inner__`, `__outer__`, `__odd__`,
-   * `__even__`, `__counter__` and `__index__` in loops
+   * `__even__`, `__counter__` and `__index__` in loops. Defaults to false.
    */
   loopContextVars?: boolean;
 

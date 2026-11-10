@@ -11,8 +11,9 @@
  * @module parser/sourceMap
  */
 
-import { createError } from '../utils/helpers.js';
+import { locateMessage } from '../utils/helpers.js';
 import { type CommentCut, stripComments } from './comments.js';
+import { TemplateSyntaxError } from './errors.js';
 
 /**
  * A position in the template that physically contains it.
@@ -150,8 +151,8 @@ export class SourceMap {
  * @param location - Where, as far as it is known
  * @returns Error to throw
  */
-export function templateError(message: string, location: { file?: string; line?: number } = {}): Error {
-  return createError(message, location.file, location.line);
+export function templateError(message: string, location: Partial<Location> = {}): TemplateSyntaxError {
+  return new TemplateSyntaxError(locateMessage(message, location.file, location.line), location);
 }
 
 /**

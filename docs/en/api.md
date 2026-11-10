@@ -27,6 +27,12 @@ render<T>(source: string, data: T, options?: CompileOptions & RenderOptions): st
 Compiles and renders in one call. Use `compile` when the same template is
 rendered more than once — this reparses every time.
 
+```typescript
+renderAsync<T>(source: string, data: T, options?: AsyncCompileOptions & RenderOptions): Promise<string>
+```
+
+The same, for a loader that answers with promises.
+
 ## CompileOptions
 
 | Option               | Default  | Effect                                                                                                               |
@@ -51,10 +57,10 @@ Passed as `includes` when more than `true` is needed. Where an included name
 is looked up belongs to the loader: for files, `nodeFileLoader`'s `paths` and
 `searchAllPaths`.
 
-| Option      | Default   | Effect                                                            |
-| ----------- | --------- | ----------------------------------------------------------------- |
-| `maxDepth`  | `10`      | Maximum nesting depth; zero or less means unlimited               |
-| `onMissing` | `'throw'` | What to do about an include naming a template that does not exist |
+| Option      | Default   | Effect                                                              |
+| ----------- | --------- | ------------------------------------------------------------------- |
+| `maxDepth`  | `10`      | Maximum nesting depth; `Infinity` (or zero or less) means unlimited |
+| `onMissing` | `'throw'` | What to do about an include naming a template that does not exist   |
 
 ## Template
 
@@ -137,9 +143,11 @@ new Environment(options?: EnvironmentOptions)
 | Method                                  | Returns             |
 | --------------------------------------- | ------------------- |
 | `compile(source, options?)`             | `Template`          |
+| `compileAsync(source, options?)`        | `Promise<Template>` |
 | `compileFile(name, options?)`           | `Template`          |
 | `compileFileAsync(name, options?)`      | `Promise<Template>` |
 | `render(source, data, options?)`        | `string`            |
+| `renderAsync(source, data, options?)`   | `Promise<string>`   |
 | `renderFile(name, data, options?)`      | `string`            |
 | `renderFileAsync(name, data, options?)` | `Promise<string>`   |
 | `clearCache()`                          | `void`              |
@@ -147,12 +155,12 @@ new Environment(options?: EnvironmentOptions)
 
 Per-call options override the environment's defaults. That includes `loader`,
 which the file methods honour for the template itself, its includes and the
-cache. `compileFileAsync` and `renderFileAsync` take `AsyncCompileOptions`, so
+cache. The `Async` methods take `AsyncCompileOptions`, so
 their `loader` may answer with promises.
 
-The synchronous methods throw "The loader is asynchronous; use compileFileAsync
-or renderFileAsync" the first time an asynchronous loader is asked for a
-template.
+The synchronous methods throw "The loader is asynchronous; use compileAsync,
+compileFileAsync, renderAsync or renderFileAsync" the first time an
+asynchronous loader is asked for a template.
 
 ### CacheOptions
 
@@ -257,9 +265,24 @@ template says.
 `TemplateNotFoundError` is thrown by a loader when a name resolves to nothing.
 It is the only error `onMissing: 'ignore'` swallows.
 
-Everything else is a plain `Error` naming the template and, where the parser
-knows it, the line. For a tag inside an included template, that is the included
-template and its own line.
+`TemplateSyntaxError` is thrown when the template text itself is wrong: a
+malformed tag, a misnested block, or a `TMPL_INCLUDE` while `includes` is
+`false`. It carries `file`, `line` and `col` where they are known; for a tag
+inside an included template, they name the included template and its own
+position.
+
+```typescript
+try {
+  compile(source, { filename: 'page.tmpl' });
+} catch (error) {
+  if (error instanceof TemplateSyntaxError) console.error(error.file, error.line, error.col);
+  else throw error;
+}
+```
+
+Everything else — include cycles and depth, a missing loader, an invalid
+option — is a plain `Error` whose message names the template where it is
+known.
 
 ## Type generation
 

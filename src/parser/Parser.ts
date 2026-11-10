@@ -355,7 +355,7 @@ export class Parser {
   private parseIncludeNode(token: Token): ParseNode | null {
     if (this.context.noIncludes) {
       throw this.error(
-        'HTML::Template : Illegal attempt to use TMPL_INCLUDE in template file : (no_includes => 1)',
+        'HTML::Template : Illegal attempt to use TMPL_INCLUDE in template file : (includes: false)',
         token
       );
     }
@@ -372,7 +372,7 @@ export class Parser {
    * @returns Error to throw
    */
   private error(message: string, token: Token | undefined): Error {
-    return templateError(message, { file: token?.file ?? this.context.filename, line: token?.line });
+    return templateError(message, { file: token?.file ?? this.context.filename, line: token?.line, col: token?.col });
   }
 
   /**

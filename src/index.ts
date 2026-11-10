@@ -9,7 +9,7 @@
 
 // Compilation and rendering
 export type { CacheOptions } from './api/cache.js';
-export { compile, compileAsync, render } from './api/compile.js';
+export { compile, compileAsync, render, renderAsync } from './api/compile.js';
 export { Environment, type EnvironmentOptions } from './api/Environment.js';
 export { Template } from './api/Template.js';
 export type {
@@ -31,10 +31,12 @@ export { TemplateNotFoundError } from './loader/errors.js';
 // that importing this entry never pulls in `node:fs`.
 export { memoryLoader } from './loader/memory.js';
 export type { ResolveRequest, SyncTemplateLoader, TemplateLoader, TemplateResource } from './loader/types.js';
+export { TemplateSyntaxError } from './parser/errors.js';
 export type { ParamUsage } from './parser/shape.js';
 
 // Export public types
 export type {
+  ArrayFilter,
   EscapeType,
   Filter,
   LazyLoopValue,
@@ -42,6 +44,7 @@ export type {
   LoopData,
   LoopDataItem,
   ParamValue,
+  ScalarFilter,
   SourceLoc
 } from './types.js';
 

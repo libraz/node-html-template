@@ -22,9 +22,7 @@ export function applyFilters(source: string, filters: readonly Filter[]): string
   let content: string | string[] = source;
 
   for (const entry of filters) {
-    const format = entry.format ?? 'scalar';
-
-    content = format === 'array' ? entry.sub(toLines(content)) : entry.sub(toText(content));
+    content = entry.format === 'array' ? entry.sub(toLines(content)) : entry.sub(toText(content));
   }
 
   return toText(content);

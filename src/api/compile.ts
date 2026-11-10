@@ -121,6 +121,23 @@ export function render<T extends object = TemplateData>(
 }
 
 /**
+ * Compile and render in one step, reading includes through an asynchronous
+ * loader.
+ *
+ * @param source - Template text
+ * @param data - Values for the template's parameters
+ * @param options - Compile and render settings
+ * @returns Rendered text
+ */
+export async function renderAsync<T extends object = TemplateData>(
+  source: string,
+  data: T,
+  options: AsyncCompileOptions & RenderOptions = {}
+): Promise<string> {
+  return (await compileAsync<T>(source, options)).render(data, options);
+}
+
+/**
  * Compile settings after defaults are applied.
  */
 interface Settings {

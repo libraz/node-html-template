@@ -157,7 +157,7 @@ compile(source, {
   // searchAllPaths: true resolves from the configured paths, not the referrer
   loader: nodeFileLoader({ paths: ['./views'], searchAllPaths: false }),
   includes: {
-    maxDepth: 10, // zero or less means unlimited
+    maxDepth: 10, // Infinity means unlimited
     onMissing: 'throw' // or 'ignore'
   }
 });

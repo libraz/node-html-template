@@ -23,12 +23,15 @@ export type EscapeType = 'html' | 'js' | 'url' | 'none';
  * Function is called only if the variable is actually used in the template
  *
  * @returns The value to substitute for the variable
+ * @deprecated Use `ScalarSource`, the type generated interfaces use.
  */
 export type LazyValue = () => string | number | boolean | null | undefined;
 
 /**
  * Single loop iteration data
  * Each key-value pair represents a parameter available within the loop
+ *
+ * @deprecated Use `TemplateData`, or a generated row type.
  */
 // biome-ignore lint/suspicious/noExplicitAny: loop data items can contain arbitrary values
 export type LoopDataItem = Record<string, any>;
@@ -38,11 +41,14 @@ export type LoopDataItem = Record<string, any>;
  * Function is called only if the loop is actually used in the template
  *
  * @returns Array of parameter objects for each loop iteration
+ * @deprecated Use `RowSource`, the type generated interfaces use.
  */
 export type LazyLoopValue = () => LoopDataItem[];
 
 /**
  * Loop data - array of objects or lazy callback
+ *
+ * @deprecated Use `RowSource`, the type generated interfaces use.
  */
 export type LoopData = LoopDataItem[] | LazyLoopValue;
 
@@ -52,27 +58,46 @@ export type LoopData = LoopDataItem[] | LazyLoopValue;
  * - Primitive values (string, number, boolean, null, undefined)
  * - Lazy value (callback function for TMPL_VAR)
  * - Loop data (array or callback for TMPL_LOOP)
+ *
+ * @deprecated Use `ScalarSource` or `RowSource`, the types generated interfaces use.
  */
 export type ParamValue = string | number | boolean | null | undefined | LazyValue | LoopData;
 
 /**
  * Filter function configuration
- * Filters are called after reading the template content but before parsing
+ * Filters are called after reading the template content but before parsing.
+ * `format` decides what `sub` receives; it may return either form.
  */
-export interface Filter {
+export type Filter = ScalarFilter | ArrayFilter;
+
+/**
+ * Filter receiving the template as one string
+ */
+export interface ScalarFilter {
   /**
    * Filter function
-   * @param content - Template content (string or array of lines)
-   * @returns Filtered content
+   * @param content - Template content
+   * @returns Filtered content, as one string or as lines
    */
-  sub: (content: string | string[]) => string | string[];
+  sub: (content: string) => string | string[];
 
+  /** Pass the content as a single string. Defaults to `scalar`. */
+  format?: 'scalar';
+}
+
+/**
+ * Filter receiving the template as an array of lines
+ */
+export interface ArrayFilter {
   /**
-   * Format of content passed to filter
-   * - `scalar`: Single string
-   * - `array`: Array of lines
+   * Filter function
+   * @param content - Template content, one element per line
+   * @returns Filtered content, as one string or as lines
    */
-  format?: 'scalar' | 'array';
+  sub: (content: string[]) => string | string[];
+
+  /** Pass the content as an array of lines */
+  format: 'array';
 }
 
 /**
@@ -131,7 +156,6 @@ export type ParseNodeType =
  * Lines and columns are 1-based and refer to the template that physically
  * contains the tag, as written: a tag from an included file names that file
  * and its own line, and comment blocks still count.
- * @internal
  */
 export interface SourceLoc {
   /** Template id, when the containing template has one */

@@ -94,7 +94,7 @@ describe('included content', () => {
 
 describe('include settings', () => {
   it('rejects any include when includes are turned off', () => {
-    expect(() => withIncludes('A<TMPL_INCLUDE NAME="header.tmpl">B', { includes: false })).toThrow(/no_includes/);
+    expect(() => withIncludes('A<TMPL_INCLUDE NAME="header.tmpl">B', { includes: false })).toThrow(/includes: false/);
   });
 
   it('drops a missing include when told to ignore it', () => {

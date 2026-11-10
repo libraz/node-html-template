@@ -139,7 +139,7 @@ compile(source, {
   // searchAllPaths: true で、参照元ではなく設定したパスから探す
   loader: nodeFileLoader({ paths: ['./views'], searchAllPaths: false }),
   includes: {
-    maxDepth: 10, // 0 以下で無制限
+    maxDepth: 10, // Infinity で無制限
     onMissing: 'throw' // または 'ignore'
   }
 });

@@ -18,7 +18,7 @@ import type { Template } from './Template.js';
  * How compiled templates are reused.
  */
 export interface CacheOptions {
-  /** Most templates kept before the least recently used one is dropped */
+  /** Most templates kept before the least recently used one is dropped. Defaults to 100. */
   maxSize?: number;
 
   /**
