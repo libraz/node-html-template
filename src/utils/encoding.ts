@@ -75,27 +75,41 @@ export function normalizeEncodingName(name: string): string {
   }
 }
 
+/** One PerlIO layer: its name and optional argument */
+const LAYER_REGEX = /^(\w+)(?:\(([^)]+)\))?$/;
+
 /**
  * Resolve an encoding name written in either Node or Perl spelling.
  *
- * @param openMode - Encoding name (e.g. 'utf-16le', '<:encoding(utf8)', ':raw')
+ * @param openMode - Encoding name (e.g. 'utf-16le', '<:encoding(utf8)', '<:raw:utf8')
  * @returns Canonical encoding name
  * @throws {Error} When the name is not an encoding this loader can decode
  */
 export function parseOpenMode(openMode: string): string {
-  const lowerMode = openMode.toLowerCase();
-  if (lowerMode.includes(':raw')) {
-    return 'latin1';
+  const layers = openMode.trim().replace(/^</, '').trim();
+  if (!layers.startsWith(':')) {
+    return normalizeEncodingName(openMode);
   }
 
-  // Handle Perl-style encoding specification: '<:encoding(utf8)'
-  const match = openMode.match(/encoding\(([^)]+)\)/i);
-  if (match?.[1]) {
-    return normalizeEncodingName(match[1]);
-  }
+  // Layers apply left to right as on a Perl filehandle, so the last one that
+  // sets an encoding wins; with none, bytes are read as they are.
+  let encoding = 'latin1';
+  for (const raw of layers.slice(1).split(':')) {
+    const layer = raw.trim();
+    const [, name = '', argument] = layer.match(LAYER_REGEX) ?? [];
+    const lower = name.toLowerCase();
 
-  // Direct encoding name
-  return normalizeEncodingName(openMode);
+    if ((lower === 'raw' || lower === 'bytes') && argument === undefined) {
+      encoding = 'latin1';
+    } else if (lower === 'utf8' && argument === undefined) {
+      encoding = 'utf-8';
+    } else if (lower === 'encoding' && argument !== undefined) {
+      encoding = normalizeEncodingName(argument.trim());
+    } else {
+      throw new Error(`Unsupported open_mode layer ':${layer}'`);
+    }
+  }
+  return encoding;
 }
 
 /**

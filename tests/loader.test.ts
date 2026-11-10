@@ -273,6 +273,21 @@ describe('encoding names', () => {
     expect(parseOpenMode('<:raw')).toBe('latin1');
   });
 
+  it('applies layers left to right, so the last encoding wins', () => {
+    expect(parseOpenMode('<:raw:encoding(UTF-8)')).toBe('utf-8');
+    expect(parseOpenMode('<:encoding(UTF-8):raw')).toBe('latin1');
+    expect(parseOpenMode('<:bytes')).toBe('latin1');
+  });
+
+  it('reads the utf8 layer', () => {
+    expect(parseOpenMode('<:utf8')).toBe('utf-8');
+    expect(parseOpenMode(':utf8')).toBe('utf-8');
+  });
+
+  it('throws for a layer it cannot honour', () => {
+    expect(() => parseOpenMode('<:crlf')).toThrow(/Unsupported open_mode layer ':crlf'/);
+  });
+
   it('accepts a bare Node encoding name', () => {
     expect(parseOpenMode('utf-16le')).toBe('utf-16le');
     expect(parseOpenMode('base64url')).toBe('base64url');
