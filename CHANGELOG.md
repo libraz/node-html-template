@@ -5,7 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-11-10
+
+### Added
+
+- `TemplateSyntaxError`, thrown for a malformed tag, a misnested block or a
+  `TMPL_INCLUDE` rejected by `includes: false`. It carries `file`, `line` and
+  `col` so a tool can point at the problem without parsing the message
+- `renderAsync`, `Environment.compileAsync` and `Environment.renderAsync`, so
+  every entry point that takes template text has an asynchronous counterpart
+- `ScalarFilter` and `ArrayFilter`: `Filter` is now a union on `format`, so
+  `sub` receives `string[]` for an array filter and `string` otherwise
+
+### Changed
+
+- Error hints name the option to change, `includes: false` and
+  `includes.maxDepth`, instead of Perl's `no_includes` and `max_includes`
+- The error a synchronous `Environment` method raises for an asynchronous
+  loader lists every asynchronous method
+- `SourceLoc` is documented as public; it is the type of `ParamInfo.loc`
+- `includes: { maxDepth: Infinity }` is documented as the way to lift the
+  include depth limit
+
+### Deprecated
+
+- `LazyValue`, `LazyLoopValue`, `LoopData`, `LoopDataItem` and `ParamValue`.
+  Use `ScalarSource`, `RowSource` and `TemplateData`, the types generated
+  interfaces use
 
 ### Fixed
 
@@ -134,6 +160,7 @@ Each is one option away from the Perl behaviour:
 - Parameter names are matched case-sensitively (`caseSensitive`)
 - Data keys the template does not declare are ignored (`strictData`)
 
+[1.1.0]: https://github.com/libraz/node-html-template/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/libraz/node-html-template/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/libraz/node-html-template/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/libraz/node-html-template/releases/tag/v1.0.0
