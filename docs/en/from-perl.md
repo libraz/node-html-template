@@ -43,11 +43,11 @@ equivalents. What they did is covered by `render`, `renderTo` and
 Three defaults are deliberately different. Each is a compile or render setting,
 so the Perl behaviour is one option away.
 
-| Setting | Perl | Here | Restore it with |
-| --- | --- | --- | --- |
-| Escaping | none | HTML | `defaultEscape: 'none'` |
-| Name matching | folds case | case-sensitive | `caseSensitive: false` |
-| Undeclared data | fatal | ignored | `strictData: true` on a render |
+| Setting         | Perl       | Here           | Restore it with                |
+| --------------- | ---------- | -------------- | ------------------------------ |
+| Escaping        | none       | HTML           | `defaultEscape: 'none'`        |
+| Name matching   | folds case | case-sensitive | `caseSensitive: false`         |
+| Undeclared data | fatal      | ignored        | `strictData: true` on a render |
 
 **Escaping** is the one that changes output. A template that already writes
 `ESCAPE="html"` is unaffected — an explicit attribute always wins. A template
@@ -64,29 +64,29 @@ catch genuine typos before the code runs.
 
 ## Options, renamed
 
-| Perl | Here |
-| --- | --- |
-| `filename` | `Environment#compileFile(name)` |
-| `scalarref`, `arrayref`, `filehandle`, `type` + `source` | `compile(source)` |
-| `path` | `nodeFileLoader`'s `paths` |
-| `search_path_on_include` | `nodeFileLoader`'s `searchAllPaths` |
-| `max_includes` | `IncludeOptions.maxDepth` |
-| `die_on_missing_include` | `IncludeOptions.onMissing` |
-| `no_includes` | `includes: false` |
-| `die_on_bad_params` | `strictData` on a render |
-| `case_sensitive` | `caseSensitive` |
-| `global_vars` | `globalVars` |
-| `loop_context_vars` | `loopContextVars` on a render |
-| `default_escape` | `defaultEscape` |
-| `vanguard_compatibility_mode` | `legacy.percentVars` |
-| `filter` | `filters` |
-| `cache`, `blind_cache` | `Environment`'s `cache` |
-| `file_cache`, `double_file_cache` | — |
-| `associate` | `resolve` on a render |
-| `print_to` | `renderTo(sink, data)` |
-| `utf8`, `open_mode` | `nodeFileLoader`'s `encoding` |
-| `HTML::Template->config` | `Environment` |
-| `force_untaint`, `debug`, `stack_debug`, `shared_cache`, … | — |
+| Perl                                                       | Here                                |
+| ---------------------------------------------------------- | ----------------------------------- |
+| `filename`                                                 | `Environment#compileFile(name)`     |
+| `scalarref`, `arrayref`, `filehandle`, `type` + `source`   | `compile(source)`                   |
+| `path`                                                     | `nodeFileLoader`'s `paths`          |
+| `search_path_on_include`                                   | `nodeFileLoader`'s `searchAllPaths` |
+| `max_includes`                                             | `IncludeOptions.maxDepth`           |
+| `die_on_missing_include`                                   | `IncludeOptions.onMissing`          |
+| `no_includes`                                              | `includes: false`                   |
+| `die_on_bad_params`                                        | `strictData` on a render            |
+| `case_sensitive`                                           | `caseSensitive`                     |
+| `global_vars`                                              | `globalVars`                        |
+| `loop_context_vars`                                        | `loopContextVars` on a render       |
+| `default_escape`                                           | `defaultEscape`                     |
+| `vanguard_compatibility_mode`                              | `legacy.percentVars`                |
+| `filter`                                                   | `filters`                           |
+| `cache`, `blind_cache`                                     | `Environment`'s `cache`             |
+| `file_cache`, `double_file_cache`                          | —                                   |
+| `associate`                                                | `resolve` on a render               |
+| `print_to`                                                 | `renderTo(sink, data)`              |
+| `utf8`, `open_mode`                                        | `nodeFileLoader`'s `encoding`       |
+| `HTML::Template->config`                                   | `Environment`                       |
+| `force_untaint`, `debug`, `stack_debug`, `shared_cache`, … | —                                   |
 
 Options that Perl accepted but this package never implemented are gone from the
 types as well as from the code: an option that silently does nothing is worse

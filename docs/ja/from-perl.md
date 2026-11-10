@@ -30,11 +30,11 @@ const html = template.render({ title: 'Hello', items });
 
 3 つの既定値を意図的に変えています。いずれもコンパイル時または描画時の設定なので、Perl の挙動はオプション 1 つで戻せます。
 
-| 設定 | Perl | ここ | 戻す方法 |
-| --- | --- | --- | --- |
-| エスケープ | なし | HTML | `defaultEscape: 'none'` |
-| 名前一致 | 大小同一視 | 大小区別 | `caseSensitive: false` |
-| 宣言外のデータ | 致命的 | 無視 | 描画時に `strictData: true` |
+| 設定           | Perl       | ここ     | 戻す方法                    |
+| -------------- | ---------- | -------- | --------------------------- |
+| エスケープ     | なし       | HTML     | `defaultEscape: 'none'`     |
+| 名前一致       | 大小同一視 | 大小区別 | `caseSensitive: false`      |
+| 宣言外のデータ | 致命的     | 無視     | 描画時に `strictData: true` |
 
 **エスケープ**は出力そのものが変わる唯一の項目です。すでに `ESCAPE="html"` を書いているテンプレートは影響を受けません。明示された属性が常に優先されるためです。生の出力に依存していたテンプレートには `defaultEscape: 'none'` が必要ですが、付ける前に一度読み直す価値があります。
 
@@ -44,29 +44,29 @@ const html = template.render({ title: 'Hello', items });
 
 ## オプションの対応
 
-| Perl | ここ |
-| --- | --- |
-| `filename` | `Environment#compileFile(name)` |
-| `scalarref` / `arrayref` / `filehandle` / `type` + `source` | `compile(source)` |
-| `path` | `nodeFileLoader` の `paths` |
-| `search_path_on_include` | `nodeFileLoader` の `searchAllPaths` |
-| `max_includes` | `IncludeOptions.maxDepth` |
-| `die_on_missing_include` | `IncludeOptions.onMissing` |
-| `no_includes` | `includes: false` |
-| `die_on_bad_params` | 描画時の `strictData` |
-| `case_sensitive` | `caseSensitive` |
-| `global_vars` | `globalVars` |
-| `loop_context_vars` | 描画時の `loopContextVars` |
-| `default_escape` | `defaultEscape` |
-| `vanguard_compatibility_mode` | `legacy.percentVars` |
-| `filter` | `filters` |
-| `cache` / `blind_cache` | `Environment` の `cache` |
-| `file_cache` / `double_file_cache` | — |
-| `associate` | 描画時の `resolve` |
-| `print_to` | `renderTo(sink, data)` |
-| `utf8` / `open_mode` | `nodeFileLoader` の `encoding` |
-| `HTML::Template->config` | `Environment` |
-| `force_untaint` / `debug` / `stack_debug` / `shared_cache` など | — |
+| Perl                                                            | ここ                                 |
+| --------------------------------------------------------------- | ------------------------------------ |
+| `filename`                                                      | `Environment#compileFile(name)`      |
+| `scalarref` / `arrayref` / `filehandle` / `type` + `source`     | `compile(source)`                    |
+| `path`                                                          | `nodeFileLoader` の `paths`          |
+| `search_path_on_include`                                        | `nodeFileLoader` の `searchAllPaths` |
+| `max_includes`                                                  | `IncludeOptions.maxDepth`            |
+| `die_on_missing_include`                                        | `IncludeOptions.onMissing`           |
+| `no_includes`                                                   | `includes: false`                    |
+| `die_on_bad_params`                                             | 描画時の `strictData`                |
+| `case_sensitive`                                                | `caseSensitive`                      |
+| `global_vars`                                                   | `globalVars`                         |
+| `loop_context_vars`                                             | 描画時の `loopContextVars`           |
+| `default_escape`                                                | `defaultEscape`                      |
+| `vanguard_compatibility_mode`                                   | `legacy.percentVars`                 |
+| `filter`                                                        | `filters`                            |
+| `cache` / `blind_cache`                                         | `Environment` の `cache`             |
+| `file_cache` / `double_file_cache`                              | —                                    |
+| `associate`                                                     | 描画時の `resolve`                   |
+| `print_to`                                                      | `renderTo(sink, data)`               |
+| `utf8` / `open_mode`                                            | `nodeFileLoader` の `encoding`       |
+| `HTML::Template->config`                                        | `Environment`                        |
+| `force_untaint` / `debug` / `stack_debug` / `shared_cache` など | —                                    |
 
 Perl が受け付けていたもののこのパッケージが実装していなかったオプションは、コードだけでなく型からも削除しました。黙って何もしないオプションは、存在しないオプションより悪いためです。
 

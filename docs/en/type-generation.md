@@ -31,15 +31,15 @@ export interface PageData {
 
 ### Options
 
-| Option | Effect |
-| --- | --- |
-| `-o, --out <file>` | Write to a file instead of standard output |
-| `--check` | Write nothing; exit 1 if `--out` is missing or out of date |
-| `--required` | Make every property required |
-| `--split` | Give each loop's row type its own named interface |
-| `--ext <list>` | Extensions to pick up when searching a directory (default `.tmpl,.html`) |
-| `--suffix <s>` | Appended to each interface name (default `Data`); the result must be a valid identifier |
-| `--import <mod>` | Module the value types are imported from |
+| Option             | Effect                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `-o, --out <file>` | Write to a file instead of standard output                                              |
+| `--check`          | Write nothing; exit 1 if `--out` is missing or out of date                              |
+| `--required`       | Make every property required                                                            |
+| `--split`          | Give each loop's row type its own named interface                                       |
+| `--ext <list>`     | Extensions to pick up when searching a directory (default `.tmpl,.html`)                |
+| `--suffix <s>`     | Appended to each interface name (default `Data`); the result must be a valid identifier |
+| `--import <mod>`   | Module the value types are imported from                                                |
 
 Two templates with the same file stem produce the same interface name, so the
 command exits 1 naming both files. It also exits 1 when an interface name,

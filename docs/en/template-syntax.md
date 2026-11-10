@@ -57,12 +57,12 @@ A default is written out exactly as given and is never escaped.
 <TMPL_VAR NAME="raw" ESCAPE="none">
 ```
 
-| Value | Effect |
-| --- | --- |
-| `html` or `1` | `& " ' < >` become entities |
-| `url` | every UTF-8 byte outside `A-Z a-z 0-9 _ . -` becomes `%XX`; an unpaired surrogate becomes `%EF%BF%BD` |
-| `js` | backslash escapes for `\ ' "`, `\n` and `\r`; U+2028 becomes `\n` and U+2029 becomes `\n\n` |
-| `none` or `0` | written through untouched |
+| Value         | Effect                                                                                                |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| `html` or `1` | `& " ' < >` become entities                                                                           |
+| `url`         | every UTF-8 byte outside `A-Z a-z 0-9 _ . -` becomes `%XX`; an unpaired surrogate becomes `%EF%BF%BD` |
+| `js`          | backslash escapes for `\ ' "`, `\n` and `\r`; U+2028 becomes `\n` and U+2029 becomes `\n\n`           |
+| `none` or `0` | written through untouched                                                                             |
 
 Any other value is a parse error.
 
@@ -84,12 +84,12 @@ or `</TMPL_UNLESS>`; closing one with the other is a parse error.
 Truth follows Perl rather than JavaScript, because that is what the templates
 were written against:
 
-| Value | Truth |
-| --- | --- |
+| Value                        | Truth |
+| ---------------------------- | ----- |
 | `undefined`, `null`, `false` | false |
-| `0`, `0n`, `''`, `'0'` | false |
-| `[]` | false |
-| anything else | true |
+| `0`, `0n`, `''`, `'0'`       | false |
+| `[]`                         | false |
+| anything else                | true  |
 
 The string `'0'` being false is the difference that catches people out.
 
@@ -120,16 +120,16 @@ and a row that declares the same name shadows what is outside it.
 
 With `loopContextVars: true` on a render, each iteration also gets:
 
-| Name | Value |
-| --- | --- |
-| `__first__` | `1` on the first iteration, otherwise `0` |
-| `__last__` | `1` on the last iteration, `''` on the first of several, `0` in between |
-| `__inner__` | `1` when neither first nor last, otherwise `0` |
-| `__outer__` | `1` on the first and last iterations, otherwise `0` |
-| `__odd__` | `1` on odd iterations, otherwise `''` |
-| `__even__` | `1` on even iterations, otherwise `''` |
-| `__counter__` | iteration number, from 1 |
-| `__index__` | iteration number, from 0 |
+| Name          | Value                                                                   |
+| ------------- | ----------------------------------------------------------------------- |
+| `__first__`   | `1` on the first iteration, otherwise `0`                               |
+| `__last__`    | `1` on the last iteration, `''` on the first of several, `0` in between |
+| `__inner__`   | `1` when neither first nor last, otherwise `0`                          |
+| `__outer__`   | `1` on the first and last iterations, otherwise `0`                     |
+| `__odd__`     | `1` on odd iterations, otherwise `''`                                   |
+| `__even__`    | `1` on even iterations, otherwise `''`                                  |
+| `__counter__` | iteration number, from 1                                                |
+| `__index__`   | iteration number, from 0                                                |
 
 The mix of `0` and `''` for a false value is Perl's, and a template that writes
 one of these out directly can see the difference, so it is reproduced exactly.
@@ -157,8 +157,8 @@ compile(source, {
   // searchAllPaths: true resolves from the configured paths, not the referrer
   loader: nodeFileLoader({ paths: ['./views'], searchAllPaths: false }),
   includes: {
-    maxDepth: 10,          // zero or less means unlimited
-    onMissing: 'throw'     // or 'ignore'
+    maxDepth: 10, // zero or less means unlimited
+    onMissing: 'throw' // or 'ignore'
   }
 });
 ```

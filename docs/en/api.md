@@ -29,19 +29,19 @@ rendered more than once — this reparses every time.
 
 ## CompileOptions
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `filename` | — | Name reported in errors and used to resolve relative includes |
-| `strict` | `true` | Treat a malformed `TMPL_` tag as an error rather than as text |
-| `defaultEscape` | `'html'` | Escape applied to a tag with no `ESCAPE` attribute: `html`, `url`, `js` or `none`, in any case; anything else throws |
-| `caseSensitive` | `true` | Whether names keep their case when matched |
-| `globalVars` | `false` | Let a name unresolved in a loop fall back to enclosing scopes |
-| `includes` | `true` | Include handling; `false` rejects any `TMPL_INCLUDE` |
-| `filters` | `[]` | Transformations applied to the source text before parsing |
-| `legacy.percentVars` | `false` | Substitute `%NAME%` as well as tags |
-| `loader` | — | Where included templates are read from. There is no default: a template with `TMPL_INCLUDE` needs one |
+| Option               | Default  | Effect                                                                                                               |
+| -------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `filename`           | —        | Name reported in errors and used to resolve relative includes                                                        |
+| `strict`             | `true`   | Treat a malformed `TMPL_` tag as an error rather than as text                                                        |
+| `defaultEscape`      | `'html'` | Escape applied to a tag with no `ESCAPE` attribute: `html`, `url`, `js` or `none`, in any case; anything else throws |
+| `caseSensitive`      | `true`   | Whether names keep their case when matched                                                                           |
+| `globalVars`         | `false`  | Let a name unresolved in a loop fall back to enclosing scopes                                                        |
+| `includes`           | `true`   | Include handling; `false` rejects any `TMPL_INCLUDE`                                                                 |
+| `filters`            | `[]`     | Transformations applied to the source text before parsing                                                            |
+| `legacy.percentVars` | `false`  | Substitute `%NAME%` as well as tags                                                                                  |
+| `loader`             | —        | Where included templates are read from. There is no default: a template with `TMPL_INCLUDE` needs one                |
 
-Everything here affects what a template *is*, which is why it is fixed at
+Everything here affects what a template _is_, which is why it is fixed at
 compile time: a name that exists under one setting and not under another cannot
 be decided per render.
 
@@ -51,9 +51,9 @@ Passed as `includes` when more than `true` is needed. Where an included name
 is looked up belongs to the loader: for files, `nodeFileLoader`'s `paths` and
 `searchAllPaths`.
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `maxDepth` | `10` | Maximum nesting depth; zero or less means unlimited |
+| Option      | Default   | Effect                                                            |
+| ----------- | --------- | ----------------------------------------------------------------- |
+| `maxDepth`  | `10`      | Maximum nesting depth; zero or less means unlimited               |
 | `onMissing` | `'throw'` | What to do about an include naming a template that does not exist |
 
 ## Template
@@ -104,12 +104,12 @@ readonly filename: string | undefined
 
 ## RenderOptions
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `strictData` | `false` | Reject data keys the template never declares |
-| `loopContextVars` | `false` | Provide `__first__` and friends inside loops |
-| `memoizeLazy` | `true` | Call a function value at most once per render, wherever it appears |
-| `resolve` | — | Fallback for top-level names absent from the data |
+| Option            | Default | Effect                                                             |
+| ----------------- | ------- | ------------------------------------------------------------------ |
+| `strictData`      | `false` | Reject data keys the template never declares                       |
+| `loopContextVars` | `false` | Provide `__first__` and friends inside loops                       |
+| `memoizeLazy`     | `true`  | Call a function value at most once per render, wherever it appears |
+| `resolve`         | —       | Fallback for top-level names absent from the data                  |
 
 `resolve` is consulted only at the top level, never inside a loop iteration: a
 name missing from a row is missing, not something to go looking for elsewhere.
@@ -129,21 +129,21 @@ new Environment(options?: EnvironmentOptions)
 
 `EnvironmentOptions` is `CompileOptions` without `filename`, plus:
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `loader` | — | Where templates are read from |
-| `cache` | `false` | Reuse compiled templates; `true` or `CacheOptions` |
+| Option   | Default | Effect                                             |
+| -------- | ------- | -------------------------------------------------- |
+| `loader` | —       | Where templates are read from                      |
+| `cache`  | `false` | Reuse compiled templates; `true` or `CacheOptions` |
 
-| Method | Returns |
-| --- | --- |
-| `compile(source, options?)` | `Template` |
-| `compileFile(name, options?)` | `Template` |
-| `compileFileAsync(name, options?)` | `Promise<Template>` |
-| `render(source, data, options?)` | `string` |
-| `renderFile(name, data, options?)` | `string` |
-| `renderFileAsync(name, data, options?)` | `Promise<string>` |
-| `clearCache()` | `void` |
-| `cacheSize` | `number` |
+| Method                                  | Returns             |
+| --------------------------------------- | ------------------- |
+| `compile(source, options?)`             | `Template`          |
+| `compileFile(name, options?)`           | `Template`          |
+| `compileFileAsync(name, options?)`      | `Promise<Template>` |
+| `render(source, data, options?)`        | `string`            |
+| `renderFile(name, data, options?)`      | `string`            |
+| `renderFileAsync(name, data, options?)` | `Promise<string>`   |
+| `clearCache()`                          | `void`              |
+| `cacheSize`                             | `number`            |
 
 Per-call options override the environment's defaults. That includes `loader`,
 which the file methods honour for the template itself, its includes and the
@@ -156,10 +156,10 @@ template.
 
 ### CacheOptions
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `maxSize` | `100` | Templates kept before the least recently used one is dropped |
-| `revalidate` | `true` | Check an entry against its sources before reusing it |
+| Option       | Default | Effect                                                       |
+| ------------ | ------- | ------------------------------------------------------------ |
+| `maxSize`    | `100`   | Templates kept before the least recently used one is dropped |
+| `revalidate` | `true`  | Check an entry against its sources before reusing it         |
 
 An entry is keyed on the template's id and every setting that changes what
 compiling it produces. A compilation with filters is never cached: a filter
@@ -205,13 +205,13 @@ never pulls in `node:fs`.
 nodeFileLoader(options?: NodeFileLoaderOptions): SyncTemplateLoader
 ```
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `paths` | `[]` | Directories searched for template files |
-| `searchAllPaths` | `false` | Search the configured paths rather than the referring file's directory |
-| `root` | `HTML_TEMPLATE_ROOT` | Prefix prepended to the search paths |
-| `cwd` | working directory | Directory used as the last resort |
-| `encoding` | `utf-8` | An encoding Node's `Buffer` or `TextDecoder` can decode, in Node or Perl spelling |
+| Option           | Default              | Effect                                                                            |
+| ---------------- | -------------------- | --------------------------------------------------------------------------------- |
+| `paths`          | `[]`                 | Directories searched for template files                                           |
+| `searchAllPaths` | `false`              | Search the configured paths rather than the referring file's directory            |
+| `root`           | `HTML_TEMPLATE_ROOT` | Prefix prepended to the search paths                                              |
+| `cwd`            | working directory    | Directory used as the last resort                                                 |
+| `encoding`       | `utf-8`              | An encoding Node's `Buffer` or `TextDecoder` can decode, in Node or Perl spelling |
 
 Everything read from the environment is captured when the loader is built, so
 resolution cannot shift under a long-lived process.
@@ -233,14 +233,14 @@ or `undefined` when the file cannot be read. Useful for a custom loader's
 
 A read-only view of what a template declares.
 
-| Member | Returns |
-| --- | --- |
-| `names` | Lookup keys at this level (lowercased when `caseSensitive` is off), in declaration order |
-| `get(name)` | `ParamInfo`, or undefined |
-| `has(name)` | `boolean` |
-| `kind(name)` | `'var'`, `'loop'` or undefined |
-| `loop(name)` | The loop body's own shape, or undefined |
-| `at(path)` | The shape at a path of loop names |
+| Member       | Returns                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `names`      | Lookup keys at this level (lowercased when `caseSensitive` is off), in declaration order |
+| `get(name)`  | `ParamInfo`, or undefined                                                                |
+| `has(name)`  | `boolean`                                                                                |
+| `kind(name)` | `'var'`, `'loop'` or undefined                                                           |
+| `loop(name)` | The loop body's own shape, or undefined                                                  |
+| `at(path)`   | The shape at a path of loop names                                                        |
 
 `ParamInfo` carries the name as first written, the normalized key, the kind,
 every form the name is used in, whether any tag gave it a `DEFAULT`, the
@@ -273,13 +273,13 @@ pascalCase(name: string): string
 
 `pascalCase` is how the command turns a file stem into an interface name.
 
-| `CodegenOptions` | Default | Effect |
-| --- | --- | --- |
-| `name` | `TemplateData` | Interface name, for `generateTypes` |
-| `required` | `false` | Make every property required |
-| `split` | `false` | Give each loop's row type its own named interface |
-| `importFrom` | `@libraz/html-template` | Module the value types are imported from |
-| `compile` | — | `CompileOptions` used to read the template |
+| `CodegenOptions` | Default                 | Effect                                            |
+| ---------------- | ----------------------- | ------------------------------------------------- |
+| `name`           | `TemplateData`          | Interface name, for `generateTypes`               |
+| `required`       | `false`                 | Make every property required                      |
+| `split`          | `false`                 | Give each loop's row type its own named interface |
+| `importFrom`     | `@libraz/html-template` | Module the value types are imported from          |
+| `compile`        | —                       | `CompileOptions` used to read the template        |
 
 A `TemplateEntry` is `{ name, source, filename? }`; `filename` lets its includes
 resolve relative to it. Interface names, split row interfaces included, must be
@@ -288,7 +288,7 @@ valid identifiers and unique within the generated module, or generation throws.
 ## version
 
 ```typescript
-version: string
+version: string;
 ```
 
 The package version, exported from `@libraz/html-template`.
